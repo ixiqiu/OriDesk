@@ -92,7 +92,12 @@ def inbox(request, scope: str = "all"):
             | Q(messages__body_text__icontains=needle)
         ).distinct()
     if filters["group"]:
-        queryset = queryset.filter(group_id=filters["group"])
+        # 手工拼接的查询串可能不是合法主键（如 ?group=abc），这里做安全转换：
+        # 非法值直接忽略该筛选，绝不因为一个坏参数返回 500。
+        try:
+            queryset = queryset.filter(group_id=int(filters["group"]))
+        except (TypeError, ValueError):
+            logger.info("收件箱收到非法的 group 参数：%r，已忽略。", filters["group"])
     if filters["status"]:
         queryset = queryset.filter(status=filters["status"])
     if filters["awaiting"] in ("0", "1"):

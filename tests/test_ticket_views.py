@@ -7,7 +7,7 @@ from django.urls import reverse
 
 from apps.audit.models import AuditLog
 from apps.mailboxes import storage
-from apps.tickets.models import Attachment, Message
+from apps.tickets.models import Attachment, Message, Ticket
 from tests.conftest import make_message, make_ticket
 
 CUSTOMER = "customer@customer-domain.com"
@@ -262,3 +262,25 @@ def test_attachment_download_x_accel_still_enforces_visibility(
 
     response = client.get(reverse("tickets:attachment_download", args=[attachment.pk]))
     assert response.status_code == 404
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"group": "abc"},
+        {"group": "999999"},
+        {"status": "not-a-status"},
+        {"awaiting": "maybe"},
+        {"assignee": "???"},
+        {"page": "abc"},
+        {"page": "9999"},
+        {"q": "'; DROP TABLE tickets; --"},
+        {"q": "%00"},
+    ],
+)
+def test_inbox_survives_bad_query_params(client, tech_user, ticket, params):
+    """坏查询参数不能让列表页 500，也不能造成注入。"""
+    client.force_login(tech_user)
+    response = client.get(reverse("tickets:inbox"), params)
+    assert response.status_code == 200
+    assert Ticket.objects.filter(pk=ticket.pk).exists()
