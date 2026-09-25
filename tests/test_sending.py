@@ -83,3 +83,18 @@ def test_reply_sets_threading_headers(tech_group, tech_mailbox, tech_user, unifi
     sent = outbox[0]["msg"]
     assert sent["In-Reply-To"] == inbound.message_id
     assert inbound.message_id in sent["References"]
+
+
+def test_fallback_lookup_survives_dirty_setting(fallback_mailbox, tech_group):
+    """配置项被写成非法值时，仍能通过 is_fallback 标记找到兜底邮箱。"""
+    from apps.accounts.models import Mailbox
+    from apps.audit.models import Setting
+
+    Setting.set("fallback_mailbox_id", "not-a-number")
+    assert Mailbox.get_fallback() == fallback_mailbox
+
+    Setting.set("fallback_mailbox_id", "999999")
+    assert Mailbox.get_fallback() == fallback_mailbox
+
+    Setting.set("fallback_mailbox_id", fallback_mailbox.pk)
+    assert Mailbox.get_fallback() == fallback_mailbox

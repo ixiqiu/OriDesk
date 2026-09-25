@@ -140,12 +140,16 @@ class Mailbox(models.Model):
 
     @classmethod
     def get_fallback(cls) -> "Mailbox | None":
-        """全局兜底邮箱（§4.6 fallback_mailbox_id 优先，其次 is_fallback 标记）。"""
+        """全局兜底邮箱（§4.6 fallback_mailbox_id 优先，其次 is_fallback 标记）。
+
+        配置值非法（非数字/指向不存在的邮箱）时自动回退到 is_fallback 标记，
+        避免因一条脏配置导致所有无邮箱组无法发信。
+        """
         from apps.audit.models import Setting
 
-        configured = Setting.get("fallback_mailbox_id")
+        configured = Setting.get_optional_int("fallback_mailbox_id")
         if configured:
-            mailbox = cls.objects.filter(pk=int(configured), is_active=True).first()
+            mailbox = cls.objects.filter(pk=configured, is_active=True).first()
             if mailbox:
                 return mailbox
         return cls.objects.filter(is_fallback=True, is_active=True).first()
