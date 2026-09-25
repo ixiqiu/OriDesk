@@ -333,7 +333,10 @@ docker compose exec web sh -c 'DB_USER=root DB_PASSWORD="$DB_ROOT_PASSWORD" DB_N
 - `DEBUG=False` 时自动开启：HSTS、`SESSION_COOKIE_SECURE`、`CSRF_COOKIE_SECURE`、`SECURE_CONTENT_TYPE_NOSNIFF`、`X_FRAME_OPTIONS=DENY`、`SECURE_REFERRER_POLICY=same-origin`。
 - 邮箱授权码以 Fernet 密文存于 `mailboxes.secret_encrypted`，日志中只出现掩码（`apps/core/crypto.py::mask_secret`）。
 - 附件路径经过 `safe_component()` 归一化，杜绝目录穿越；危险扩展名仅允许下载。
-- **待整改项**：`/media/` 目前由 Nginx 直接对外服务，无身份校验，附件可被匿名下载，绕过工单可见性。整改方案（`X-Accel-Redirect` + 鉴权下载视图）与过渡期缓解措施见 [deploy/nginx/ticket.example.com.conf](deploy/nginx/ticket.example.com.conf) 中的注释。
+- **附件鉴权下载（已默认启用）**：浏览器只能通过 `/attachments/<id>/download|preview/` 取附件，视图校验登录 + 工单可见性，
+  再以 `X-Accel-Redirect` 交给 Nginx 的 `internal` location 传输；`/media/attachments/` 匿名直链返回 404。
+  上线时请确认 `.env` 的 `ATTACHMENT_X_ACCEL_PREFIX=/media/attachments/` 与 Nginx 配置成对（见 [docs/部署手册.md](docs/部署手册.md) §4.2）。
+- `check --deploy` 在生产变量下仅剩 `security.W021`（HSTS preload，属有意保留），逐项证据见 [docs/安全清单核查.md](docs/安全清单核查.md)。
 
 ---
 
