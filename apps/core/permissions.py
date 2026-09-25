@@ -20,6 +20,7 @@ __all__ = [
     "login_required",
     "superadmin_required",
     "routing_manager_required",
+    "mailbox_admin_required",
     "get_visible_ticket",
     "can_manage_routing",
 ]
@@ -40,6 +41,31 @@ def superadmin_required(view_func):
 
 def routing_manager_required(view_func):
     """规则 / 模板 / 系统设置：超级管理员或管理员组成员。"""
+
+    @wraps(view_func)
+    @login_required
+    def _wrapped(request, *args, **kwargs):
+        if not can_manage_routing(request.user):
+            raise PermissionDenied("需要管理员权限。")
+        return view_func(request, *args, **kwargs)
+
+    return _wrapped
+
+
+def mailbox_admin_required(view_func):
+    """邮箱配置（查看/新建/编辑/连通性检查）的权限门。
+
+    允许：超级管理员、管理员组成员、组内管理员（即 `sees_all_tickets` 的那批人，
+    与 `routing_manager_required` 同一集合）。2026-09 经人工确认从"仅超管"放开，
+    让各业务组能自行维护组邮箱。
+
+    风险提示（已在 docs/邮箱接入指南.md §7 记录）：能配邮箱 = 能看到/修改**所有**邮箱
+    的连接参数并更新凭据（凭据本身仍不回显明文）。因此：
+
+    - 邮箱的新建/编辑/变更凭据都会写审计（谁、何时、改了哪些字段）；
+    - 用户/用户组的管理权限仍只属于超级管理员，两者已解耦；
+    - 若将来需要"只能管本组邮箱"的细分权限，在这里收窄即可。
+    """
 
     @wraps(view_func)
     @login_required

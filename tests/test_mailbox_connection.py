@@ -382,3 +382,123 @@ def test_code_has_no_hardcoded_feishu_dependency():
             if "feishu" in line.lower() and "预设" not in line and "preset" not in line.lower():
                 suspicious.append(f"{path}:{lineno}: {line.strip()}")
     assert suspicious == [], "发现疑似飞书专属逻辑：" + "; ".join(suspicious)
+
+
+# --------------------------------------------------------------- 权限：谁可以配置邮箱
+def test_group_admin_can_manage_mailboxes(client, db, tech_group):
+    """决定（2026-09）：可跨组查看的管理者（组内管理员/管理员组成员）也能配置邮箱。"""
+    from apps.accounts.models import UserGroup
+
+    user = User.objects.create_user(username="groupadmin", password="DemoPass!2345")
+    UserGroup.objects.create(user=user, group=tech_group, is_admin=True)
+    client.force_login(user)
+
+    assert client.get(reverse("accounts:mailbox_list")).status_code == 200
+    assert client.get(reverse("accounts:mailbox_create")).status_code == 200
+
+
+def test_admin_group_member_can_manage_mailboxes(client, db, admin_group):
+    from apps.accounts.models import UserGroup
+
+    user = User.objects.create_user(username="admingroupmember", password="DemoPass!2345")
+    UserGroup.objects.create(user=user, group=admin_group)
+    client.force_login(user)
+
+    assert client.get(reverse("accounts:mailbox_list")).status_code == 200
+
+
+def test_plain_member_still_forbidden_on_mailboxes(client, db, tech_group):
+    """普通组员仍然无权：放开的是管理者，不是所有人。"""
+    from apps.accounts.models import UserGroup
+
+    user = User.objects.create_user(username="plainmember", password="DemoPass!2345")
+    UserGroup.objects.create(user=user, group=tech_group)  # 非组内管理员
+    client.force_login(user)
+
+    assert client.get(reverse("accounts:mailbox_list")).status_code == 403
+    assert client.get(reverse("accounts:mailbox_create")).status_code == 403
+
+
+def test_group_admin_cannot_manage_users_or_groups(client, db, tech_group):
+    """邮箱配置放开后，用户/用户组管理仍只属于超级管理员（两者已解耦）。"""
+    from apps.accounts.models import UserGroup
+
+    user = User.objects.create_user(username="groupadmin2", password="DemoPass!2345")
+    UserGroup.objects.create(user=user, group=tech_group, is_admin=True)
+    client.force_login(user)
+
+    assert client.get(reverse("accounts:user_list")).status_code == 403
+    assert client.get(reverse("accounts:group_list")).status_code == 403
+    # 但仍然可以配置邮箱
+    assert client.get(reverse("accounts:mailbox_list")).status_code == 200
+
+
+def test_mailbox_save_writes_audit_without_credentials(client, admin_user):
+    """放开权限后必须有审计：记录改了哪些字段，但绝不记录凭据明文。"""
+    from apps.audit.models import AuditLog
+
+    client.force_login(admin_user)
+    client.post(
+        reverse("accounts:mailbox_create"),
+        {
+            "name": "审计用邮箱",
+            "email": "audit-box@example.com",
+            "provider": "gmail",
+            "imap_host": "",
+            "smtp_host": "",
+            "username": "audit-box@example.com",
+            "secret": "super-secret-code",
+            "is_active": "on",
+        },
+        follow=True,
+    )
+
+    log = AuditLog.objects.filter(detail__event="mailbox_created").first()
+    assert log is not None
+    assert log.detail["mailbox"] == "audit-box@example.com"
+    assert log.detail["credentials_updated"] is True
+    assert log.user == admin_user
+    assert "super-secret-code" not in str(log.detail)
+    assert "super-secret-code" not in (log.detail.get("changed_fields") or [])
+
+
+def test_mailbox_edit_audit_lists_changed_fields(client, admin_user):
+    from apps.audit.models import AuditLog
+
+    mailbox = make_mailbox(email="edit-audit@example.com")
+    client.force_login(admin_user)
+    client.post(
+        reverse("accounts:mailbox_edit", args=[mailbox.pk]),
+        {
+            "name": "改名后的邮箱",
+            "email": mailbox.email,
+            "provider": "",
+            "imap_host": mailbox.imap_host,
+            "imap_port": mailbox.imap_port,
+            "imap_ssl": "on",
+            "smtp_host": mailbox.smtp_host,
+            "smtp_port": mailbox.smtp_port,
+            "smtp_ssl": "on",
+            "username": mailbox.username,
+            "secret": "",
+            "is_active": "on",
+        },
+        follow=True,
+    )
+
+    log = AuditLog.objects.filter(detail__event="mailbox_updated").first()
+    assert log is not None
+    assert "name" in log.detail["changed_fields"]
+    assert log.detail["credentials_updated"] is False
+
+
+def test_nav_shows_mailbox_entry_for_group_admin(client, db, tech_group):
+    from apps.accounts.models import UserGroup
+
+    user = User.objects.create_user(username="navadmin", password="DemoPass!2345")
+    UserGroup.objects.create(user=user, group=tech_group, is_admin=True)
+    client.force_login(user)
+
+    body = client.get(reverse("tickets:inbox")).content.decode()
+    assert reverse("accounts:mailbox_list") in body  # 导航里出现"邮箱配置"
+    assert reverse("accounts:user_list") not in body  # 但用户管理不出现

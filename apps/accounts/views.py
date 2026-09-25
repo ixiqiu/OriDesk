@@ -23,7 +23,7 @@ from django.views.decorators.http import require_POST
 from apps.accounts.forms import GroupForm, MailboxForm, UserForm
 from apps.accounts.models import Group, Mailbox, User, UserGroup
 from apps.accounts.provider_presets import MAILBOX_PROVIDER_PRESETS
-from apps.core.permissions import superadmin_required
+from apps.core.permissions import mailbox_admin_required, superadmin_required
 from apps.core.utils import truncate
 from apps.tickets.selectors import visible_tickets
 
@@ -174,8 +174,29 @@ def group_edit(request, pk: int):
     )
 
 
+def _audit_mailbox_change(request, mailbox, form, *, created: bool) -> None:
+    """邮箱配置变更审计：谁、何时、改了哪些字段、是否更新了凭据。
+
+    只记录字段名与布尔标记，**绝不记录凭据明文**（§10.3）。
+    """
+    from apps.audit.services import record
+
+    changed = sorted(name for name in form.changed_data if name != "secret")
+    record(
+        user=request.user,
+        action="config_change",
+        detail={
+            "event": "mailbox_created" if created else "mailbox_updated",
+            "mailbox": mailbox.email,
+            "changed_fields": changed,
+            "credentials_updated": "secret" in form.changed_data,
+            "is_fallback": mailbox.is_fallback,
+        },
+    )
+
+
 # ------------------------------------------------------------------ 邮箱配置
-@superadmin_required
+@mailbox_admin_required
 def mailbox_list(request):
     """邮箱列表：连接参数与同步进度；凭据只显示是否已配置。"""
     queryset = Mailbox.objects.select_related("group").order_by("name", "id")
@@ -192,12 +213,13 @@ def mailbox_list(request):
     return render(request, "accounts/mailbox_list.html", context)
 
 
-@superadmin_required
+@mailbox_admin_required
 def mailbox_create(request):
     """新建邮箱配置（必须填写凭据）。"""
     form = MailboxForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         mailbox = form.save()
+        _audit_mailbox_change(request, mailbox, form, created=True)
         messages.success(request, f"邮箱「{mailbox.email}」已创建。")
         return redirect("accounts:mailbox_list")
     if request.method == "POST":
@@ -209,13 +231,14 @@ def mailbox_create(request):
     )
 
 
-@superadmin_required
+@mailbox_admin_required
 def mailbox_edit(request, pk: int):
     """编辑邮箱配置（凭据留空表示不修改）。"""
     mailbox = get_object_or_404(Mailbox, pk=pk)
     form = MailboxForm(request.POST or None, instance=mailbox)
     if request.method == "POST" and form.is_valid():
         form.save()
+        _audit_mailbox_change(request, mailbox, form, created=False)
         messages.success(request, f"邮箱「{mailbox.email}」已保存。")
         return redirect("accounts:mailbox_list")
     if request.method == "POST":
@@ -227,7 +250,7 @@ def mailbox_edit(request, pk: int):
     )
 
 
-@superadmin_required
+@mailbox_admin_required
 @require_POST
 def mailbox_verify(request, pk: int):
     """只读连通性检查：IMAP 登录并选中 INBOX，SMTP 登录后立即退出（不发信）。"""

@@ -39,6 +39,7 @@
       <a href="{% url 'autoresponder:template_list' %}" class="{% nav_active 'autoresponder:template_list' %}">自动回复</a>
       <a href="{% url 'routing:settings' %}" class="{% nav_active 'routing:settings' %}">系统设置</a>
       <a href="{% url 'routing:mailbox_overview' %}" class="{% nav_active 'routing:mailbox_overview' %}">邮箱与同步</a>
+      <a href="{% url 'accounts:mailbox_list' %}" class="{% nav_active 'accounts:mailbox_list' %}">邮箱配置</a>
       <a href="{% url 'audit:log_list' %}" class="{% nav_active 'audit:log_list' %}">审计日志</a>
       {% endif %}
 
@@ -46,7 +47,6 @@
       <div class="nav-section">系统</div>
       <a href="{% url 'accounts:user_list' %}" class="{% nav_active 'accounts:user_list' %}">用户管理</a>
       <a href="{% url 'accounts:group_list' %}" class="{% nav_active 'accounts:group_list' %}">用户组管理</a>
-      <a href="{% url 'accounts:mailbox_list' %}" class="{% nav_active 'accounts:mailbox_list' %}">邮箱配置</a>
       {% endif %}
       {% if user.is_staff %}
       <a href="{% url 'admin:index' %}">Django Admin</a>

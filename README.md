@@ -338,6 +338,7 @@ docker compose exec web sh -c 'DB_USER=root DB_PASSWORD="$DB_ROOT_PASSWORD" DB_N
 
 - 邮箱授权码以 Fernet 密文存于 `mailboxes.secret_encrypted`，日志中只出现掩码（`apps/core/crypto.py::mask_secret`）。
 - 附件路径经过 `safe_component()` 归一化，杜绝目录穿越；危险扩展名仅允许下载。
+- 邮箱配置（含凭据）可由**超级管理员与可跨组查看的管理者**（组内管理员 / 管理员组成员）维护；用户与用户组管理仍仅限超级管理员。邮箱的新建/编辑/换凭据都会写审计，凭据页面永不回显。
 - **附件鉴权下载（已默认启用）**：浏览器只能通过 `/attachments/<id>/download|preview/` 取附件，视图校验登录 + 工单可见性，
   再以 `X-Accel-Redirect` 交给 Nginx 的 `internal` location 传输；`/media/attachments/` 匿名直链返回 404。
   上线时请确认 `.env` 的 `ATTACHMENT_X_ACCEL_PREFIX=/media/attachments/` 与 Nginx 配置成对（见 [docs/部署手册.md](docs/部署手册.md) §4.2）。
