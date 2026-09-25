@@ -8,10 +8,21 @@ from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.core.exceptions import ValidationError
 
 from apps.accounts.models import Group, Mailbox, User, UserGroup
+from apps.accounts.provider_presets import PRESETS_BY_KEY, PROVIDER_CHOICES
 
 
 class MailboxAdminForm(forms.ModelForm):
-    """邮箱表单：凭据以密码框录入，落库前 Fernet 加密，永不回显明文。"""
+    """邮箱表单：凭据以密码框录入，落库前 Fernet 加密，永不回显明文。
+
+    `provider` 为非模型字段（服务商预设），仅提供"下拉即填"的便利，不写入数据库。
+    """
+
+    provider = forms.ChoiceField(
+        label="服务商预设",
+        required=False,
+        choices=PROVIDER_CHOICES,
+        help_text="选择后自动填入主机/端口/加密方式；留空则手动填写（任何标准 IMAP/SMTP 服务商均可）。",
+    )
 
     secret = forms.CharField(
         label="授权码 / 密码",
@@ -36,10 +47,30 @@ class MailboxAdminForm(forms.ModelForm):
             "is_active",
         ]
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["imap_host"].required = False
+        self.fields["smtp_host"].required = False
+        self.fields["imap_port"].required = False
+        self.fields["smtp_port"].required = False
+
     def clean(self):
         cleaned = super().clean()
         if not self.instance.pk and not cleaned.get("secret"):
             raise ValidationError({"secret": "新建邮箱必须填写授权码/密码。"})
+        preset = PRESETS_BY_KEY.get((cleaned.get("provider") or "").strip())
+        if preset:  # 主机留空时用预设兜底，不覆盖手工填写
+            if not (cleaned.get("imap_host") or "").strip():
+                cleaned["imap_host"] = preset["imap_host"]
+            if not (cleaned.get("smtp_host") or "").strip():
+                cleaned["smtp_host"] = preset["smtp_host"]
+            if not cleaned.get("imap_port"):
+                cleaned["imap_port"] = preset["imap_port"]
+            if not cleaned.get("smtp_port"):
+                cleaned["smtp_port"] = preset["smtp_port"]
+        for field in ("imap_host", "smtp_host"):
+            if not (cleaned.get(field) or "").strip():
+                raise ValidationError({field: "请填写主机地址，或选择一个服务商预设。"})
         return cleaned
 
     def save(self, commit=True):

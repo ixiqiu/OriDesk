@@ -574,11 +574,27 @@ def test_second_fallback_mailbox_rejected(admin_client, mailbox):
 
 # ------------------------------------------------------------------ 连通性检查
 class _FakeIMAPClient:
-    def __init__(self, host, port=None, ssl=None):
+    """假 IMAP 客户端（配合 apps/mailboxes/imap_client.connect_imap 使用）。
+
+    邮箱默认 imap_ssl=True，因此 connect_imap 不会走 STARTTLS 分支；
+    这里仍实现 has_capability 以便断言加密策略相关的调用。
+    """
+
+    def __init__(self, host, port=None, ssl=None, timeout=None):
         self.host = host
         self.port = port
         self.ssl = ssl
         self.logged_out = False
+        self.starttls_called = False
+
+    def has_capability(self, name):
+        return str(name).upper() == "STARTTLS"
+
+    def capabilities(self):
+        return (b"IMAP4REV1", b"STARTTLS")
+
+    def starttls(self, ssl_context=None):
+        self.starttls_called = True
 
     def login(self, username, secret):
         self.username = username
@@ -607,8 +623,8 @@ class _FakeSMTP:
 
 
 def test_mailbox_verify_success(admin_client, mailbox, monkeypatch):
-    monkeypatch.setattr("apps.accounts.views.imapclient.IMAPClient", _FakeIMAPClient)
-    monkeypatch.setattr("apps.accounts.views.smtplib.SMTP_SSL", _FakeSMTP)
+    monkeypatch.setattr("imapclient.IMAPClient", _FakeIMAPClient)
+    monkeypatch.setattr("smtplib.SMTP_SSL", _FakeSMTP)
 
     response = admin_client.post(reverse("accounts:mailbox_verify", args=[mailbox.pk]), follow=True)
     body = response.content.decode()
@@ -622,7 +638,7 @@ def test_mailbox_verify_reports_imap_error_instead_of_500(admin_client, mailbox,
         def __init__(self, *args, **kwargs):
             raise OSError("connection refused")
 
-    monkeypatch.setattr("apps.accounts.views.imapclient.IMAPClient", _BoomIMAP)
+    monkeypatch.setattr("imapclient.IMAPClient", _BoomIMAP)
 
     response = admin_client.post(reverse("accounts:mailbox_verify", args=[mailbox.pk]), follow=True)
     body = response.content.decode()
@@ -636,7 +652,7 @@ def test_mailbox_verify_does_not_leak_secret_on_error(admin_client, mailbox, mon
         def __init__(self, *args, **kwargs):
             raise OSError("auth failed for fallback-auth-code")
 
-    monkeypatch.setattr("apps.accounts.views.imapclient.IMAPClient", _BoomIMAP)
+    monkeypatch.setattr("imapclient.IMAPClient", _BoomIMAP)
 
     response = admin_client.post(reverse("accounts:mailbox_verify", args=[mailbox.pk]), follow=True)
     assert "fallback-auth-code" not in response.content.decode()

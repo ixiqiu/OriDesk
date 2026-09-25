@@ -73,10 +73,10 @@ class Command(BaseCommand):
                 email=email,
                 defaults={
                     "name": name,
-                    "imap_host": "imap.feishu.cn",
+                    "imap_host": "imap.example.com",  # 占位：按实际服务商修改（界面有服务商预设）
                     "imap_port": 993,
                     "imap_ssl": True,
-                    "smtp_host": "smtp.feishu.cn",
+                    "smtp_host": "smtp.example.com",
                     "smtp_port": 465,
                     "smtp_ssl": True,
                     "username": email,

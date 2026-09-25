@@ -4,6 +4,7 @@
 
 - 开发依据：[开发文档 v1.1](docs/新技元邮箱及工单管理系统-开发文档-v1.1.md)（技术栈 §8 / 部署架构 §9 / 安全清单 §10 / MVP 路线 §11）
 - 部署手册：[docs/部署手册.md](docs/部署手册.md)
+- 邮箱接入指南（换服务商 / 图形化配置 / 授权码与故障排查）：[docs/邮箱接入指南.md](docs/邮箱接入指南.md)
 - 运维手册：[docs/运维手册.md](docs/运维手册.md)
 
 > **就绪门槛**：模型、服务层、邮件处理流水线（防循环、HTML 净化、附件解析、IMAP 增量同步、路由/粘性/自动回复）、Web 视图与模板、APScheduler 定时任务均已落地。部署前必须通过两道关卡——`python manage.py check` 无错误、`python -m pytest` 全绿（CI 还会额外跑 `makemigrations --check --dry-run`、`check --deploy` 与 MariaDB 集成测试，见 `.github/workflows/ci.yml`）。
@@ -15,6 +16,7 @@
 | # | 功能 | 关键行为 | 代码落点 |
 |---|---|---|---|
 | 1 | 多层级邮箱入口 | 统一邮箱 / 组专用邮箱 / 全局兜底邮箱（全局唯一）/ 管理员组邮箱 | `apps/accounts/models.py`（`Mailbox`、`Group`） |
+| 1b | 邮箱接入（不限服务商） | 只依赖标准 IMAP/SMTP：飞书/腾讯企业邮/阿里云/网易/Gmail/M365/Zoho/自建均可；界面上选「服务商预设」自动填主机端口；SSL 或强制 STARTTLS；连通性检查只读不发信 | `apps/mailboxes/imap_client.py`、`apps/accounts/provider_presets.py`、`/accounts/mailboxes/`（图形化配置） |
 | 2 | 邮件接入 | IMAP 增量拉取，按 `UIDVALIDITY` 变更重置同步位点，`last_uid` 只推进到连续成功处理的最后一封 | `apps/mailboxes/sync.py` |
 | 3 | 防循环过滤 | `Auto-Submitted`、`X-Auto-Response-Suppress`、`Precedence: bulk`、`List-Id`、来自本系统邮箱、`no-reply@`/`mailer-daemon@` | `apps/mailboxes/filters.py` |
 | 4 | HTML 净化 | bleach 白名单标签/属性，远程图片默认不加载 | `apps/mailboxes/sanitizer.py` |

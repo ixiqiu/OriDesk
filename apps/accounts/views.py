@@ -12,7 +12,6 @@ from __future__ import annotations
 import logging
 import smtplib
 
-import imapclient
 from django.contrib import messages
 from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.decorators import login_required
@@ -23,6 +22,7 @@ from django.views.decorators.http import require_POST
 
 from apps.accounts.forms import GroupForm, MailboxForm, UserForm
 from apps.accounts.models import Group, Mailbox, User, UserGroup
+from apps.accounts.provider_presets import MAILBOX_PROVIDER_PRESETS
 from apps.core.permissions import superadmin_required
 from apps.core.utils import truncate
 from apps.tickets.selectors import visible_tickets
@@ -91,7 +91,7 @@ def user_create(request):
     return render(
         request,
         "accounts/user_form.html",
-        {"form": form, "is_create": True, "object": None},
+        {"form": form, "is_create": True, "object": None, "provider_presets": MAILBOX_PROVIDER_PRESETS},
     )
 
 
@@ -223,7 +223,7 @@ def mailbox_edit(request, pk: int):
     return render(
         request,
         "accounts/mailbox_form.html",
-        {"form": form, "is_create": False, "object": mailbox},
+        {"form": form, "is_create": False, "object": mailbox, "provider_presets": MAILBOX_PROVIDER_PRESETS},
     )
 
 
@@ -260,10 +260,15 @@ def mailbox_verify(request, pk: int):
 
 
 def _imap_inbox_count(mailbox: Mailbox, secret: str) -> int:
-    """只读登录 IMAP 并选中 INBOX，返回邮件总数。"""
-    client = imapclient.IMAPClient(mailbox.imap_host, port=mailbox.imap_port, ssl=mailbox.imap_ssl)
+    """只读登录 IMAP 并选中 INBOX，返回邮件总数。
+
+    复用 `apps.mailboxes.imap_client.connect_imap`，与定时同步使用**完全相同**的
+    加密策略（SSL 或 STARTTLS）与登录逻辑，避免"检查通过但同步失败"的偏差。
+    """
+    from apps.mailboxes.imap_client import connect_imap
+
+    client = connect_imap(mailbox, secret, timeout=15)
     try:
-        client.login(mailbox.username, secret)
         selected = client.select_folder("INBOX")
         if isinstance(selected, dict):
             return int(selected.get(b"EXISTS", 0) or 0)

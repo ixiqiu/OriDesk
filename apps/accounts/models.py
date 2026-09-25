@@ -52,7 +52,16 @@ class User(AbstractUser):
 
 
 class Mailbox(models.Model):
-    """邮箱配置。连接飞书企业邮箱的 IMAP/SMTP。"""
+    """邮箱配置：通过**标准 IMAP/SMTP** 接入任意邮箱服务商。
+
+    开发文档 §2.1/§4.2 以飞书企业邮箱作为初始部署对象，但连接层只依赖标准协议：
+    飞书、腾讯企业邮、阿里云、网易、Gmail、Microsoft 365、Zoho、自建 Postfix/Dovecot
+    等都可以接入。服务商差异（主机、端口、加密方式、授权码）全部由本模型的字段表达，
+    界面上提供"服务商预设"辅助填写（`apps/accounts/provider_presets.py`）。
+
+    `imap_ssl` / `smtp_ssl` 为 True 表示隐式 TLS（993/465）；为 False 表示明文连接后
+    强制升级 STARTTLS（143/587），服务器不支持时会报错而不会明文提交凭据。
+    """
 
     name = models.CharField(max_length=100)
     email = models.EmailField(unique=True)

@@ -16,6 +16,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Q, QuerySet
 
 from apps.accounts.models import Group, Mailbox, User, UserGroup
+from apps.accounts.provider_presets import PRESETS_BY_KEY, PROVIDER_CHOICES
 
 USER_ADMIN_PREFIX = "membership_admin_"
 GROUP_ADMIN_PREFIX = "member_admin_"
@@ -259,7 +260,19 @@ class GroupForm(forms.ModelForm):
 
 # ------------------------------------------------------------------ 邮箱配置
 class MailboxForm(forms.ModelForm):
-    """邮箱配置：字段与 MailboxAdminForm 一致；凭据只写不读。"""
+    """邮箱配置：字段与 MailboxAdminForm 一致；凭据只写不读。
+
+    `provider` 是**非模型字段**，只用于"选服务商 → 自动填主机/端口/加密"的便利：
+    它不会被写入数据库，也不会覆盖管理员手工填写的值（仅当对应主机为空时才做兜底填充）。
+    系统本身只依赖标准 IMAP/SMTP，不绑定任何服务商。
+    """
+
+    provider = forms.ChoiceField(
+        label="服务商预设",
+        required=False,
+        choices=PROVIDER_CHOICES,
+        help_text="选择后会自动填入主机/端口/加密方式（页面脚本即时填充；未启用脚本时保存阶段也会兜底填充）。",
+    )
 
     secret = forms.CharField(
         label="授权码 / 密码",
@@ -285,10 +298,23 @@ class MailboxForm(forms.ModelForm):
         ]
         help_texts = {
             "is_fallback": "全局兜底邮箱，全局唯一：无邮箱组的对外回信都由它发出（§2.1）。",
+            "imap_host": "IMAP 服务器地址；选择服务商预设可留空，保存时自动填充。",
+            "smtp_host": "SMTP 服务器地址；选择服务商预设可留空，保存时自动填充。",
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # 允许"只选服务商预设、主机留空"提交：真正的非空校验放在 clean() 里，
+        # 这样既不放松模型约束（数据库仍要求非空），又能让无脚本环境正常保存。
+        self.fields["imap_host"].required = False
+        self.fields["smtp_host"].required = False
+        # 端口留空时：优先用所选预设的端口，没有预设则用模型默认值（993 / 465）
+        self.fields["imap_port"].required = False
+        self.fields["smtp_port"].required = False
 
     def clean(self):
         cleaned = super().clean()
+        self._apply_provider_preset(cleaned)
         if not self.instance.pk and not cleaned.get("secret"):
             self.add_error("secret", "新建邮箱必须填写授权码/密码。")
 
@@ -302,6 +328,36 @@ class MailboxForm(forms.ModelForm):
                     "已存在全局兜底邮箱，全局只能有一个（开发文档 §2.1）。",
                 )
         return cleaned
+
+    def _apply_provider_preset(self, cleaned: dict) -> None:
+        """服务端兜底：主机为空时用所选预设补齐（不覆盖已填写的值）。
+
+        这样即使浏览器没有执行静态脚本，管理员选择服务商后也能保存出可用的连接参数。
+        """
+        preset = PRESETS_BY_KEY.get((cleaned.get("provider") or "").strip())
+        if preset:
+            if not (cleaned.get("imap_host") or "").strip():
+                cleaned["imap_host"] = preset["imap_host"]
+                self.instance.imap_host = preset["imap_host"]
+            if not (cleaned.get("smtp_host") or "").strip():
+                cleaned["smtp_host"] = preset["smtp_host"]
+                self.instance.smtp_host = preset["smtp_host"]
+            if not cleaned.get("imap_port"):
+                cleaned["imap_port"] = preset["imap_port"]
+                self.instance.imap_port = preset["imap_port"]
+            if not cleaned.get("smtp_port"):
+                cleaned["smtp_port"] = preset["smtp_port"]
+                self.instance.smtp_port = preset["smtp_port"]
+
+        # 补齐之后再校验非空（模型层仍是非空字段，不放松不变量）
+        if not (cleaned.get("imap_host") or "").strip():
+            self.add_error("imap_host", "请填写 IMAP 主机，或选择一个服务商预设。")
+        if not (cleaned.get("smtp_host") or "").strip():
+            self.add_error("smtp_host", "请填写 SMTP 主机，或选择一个服务商预设。")
+        for field in ("imap_port", "smtp_port"):
+            value = cleaned.get(field)
+            if value is not None and not (1 <= int(value) <= 65535):
+                self.add_error(field, "端口需在 1–65535 之间。")
 
     def save(self, commit: bool = True):
         instance = super().save(commit=False)

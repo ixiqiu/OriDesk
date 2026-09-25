@@ -16,13 +16,14 @@ from django.db import DatabaseError
 from django.utils import timezone
 
 from apps.accounts.models import Mailbox
+from apps.mailboxes.imap_client import (  # noqa: F401 - 再导出，保持既有导入路径可用
+    ImapConnectionError,
+    MailSyncError,
+    connect_imap,
+)
 from apps.mailboxes.pipeline import process_inbound
 
 logger = logging.getLogger(__name__)
-
-
-class MailSyncError(Exception):
-    """IMAP 同步失败。"""
 
 
 def _status_value(status, key: str):
@@ -37,9 +38,11 @@ def _status_value(status, key: str):
 
 
 def sync_mailbox(mailbox: Mailbox, *, limit: int | None = None, now=None) -> dict:
-    """增量拉取指定邮箱的新邮件，返回统计信息。"""
-    from imapclient import IMAPClient
+    """增量拉取指定邮箱的新邮件，返回统计信息。
 
+    连接失败（含"未提供 STARTTLS"这类加密策略问题）统一抛 `MailSyncError`，
+    由 `sync_all_mailboxes` 汇总，不影响其他邮箱。
+    """
     try:
         secret = mailbox.get_secret()
     except Exception as exc:  # noqa: BLE001 - 凭据不可用时给出明确错误
@@ -47,10 +50,8 @@ def sync_mailbox(mailbox: Mailbox, *, limit: int | None = None, now=None) -> dic
 
     stats = {"mailbox": mailbox.email, "fetched": 0, "processed": 0, "skipped": 0, "failed": 0}
 
-    with IMAPClient(
-        mailbox.imap_host, port=mailbox.imap_port, ssl=mailbox.imap_ssl, timeout=60
-    ) as client:
-        client.login(mailbox.username, secret)
+    # 统一走连接工厂：隐式 TLS 或 STARTTLS 由 imap_ssl 决定，任何服务商一视同仁
+    with connect_imap(mailbox, secret, timeout=60) as client:
         client.select_folder("INBOX")
 
         status = client.folder_status("INBOX")

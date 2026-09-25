@@ -127,7 +127,7 @@ def _read_attachment(item) -> tuple[str, bytes, str]:
 
 
 def smtp_send(mailbox, msg: EmailMessage, *, timeout: int = 30) -> None:
-    """通过飞书企业邮箱 SMTP 发信。
+    """通过标准 SMTP 发信（隐式 TLS 或 STARTTLS），任何服务商通用。
 
     这是唯一的网络发信出口，测试中可 patch `apps.mailboxes.services.smtp_send`。
     凭据只在这里解密，绝不写日志。

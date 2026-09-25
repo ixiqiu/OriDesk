@@ -30,6 +30,20 @@
 
       <hr>
 
+      <h3>服务商</h3>
+      <div class="form-row">
+        <label for="{{ form.provider.id_for_label }}">服务商预设</label>
+        {{ form.provider }}
+        <div class="helptext">
+          系统只依赖**标准 IMAP/SMTP**，不绑定任何服务商：飞书、腾讯企业邮、阿里云、网易、Gmail、
+          Microsoft 365、Zoho、自建 Postfix/Dovecot 都可以接入，选一个预设会自动填好主机与端口，
+          也可以选「自定义」全部手填。
+        </div>
+        <div id="provider-hint" class="alert alert-info mt-2 hidden"></div>
+      </div>
+
+      <hr>
+
       <h3>IMAP（收信）</h3>
       <div class="flex gap-3 flex-wrap">
         <div class="form-row flex-1">
@@ -44,8 +58,12 @@
         </div>
       </div>
       <div class="form-row">
-        <label class="flex items-center gap-2 cursor-pointer">{{ form.imap_ssl }} 使用 SSL</label>
+        <label class="flex items-center gap-2 cursor-pointer">{{ form.imap_ssl }} 使用 SSL（隐式 TLS，通常 993）</label>
         {{ form.imap_ssl.errors }}
+        <div class="helptext">
+          关闭时系统会先明文连接、再用 **STARTTLS 升级为加密**后才登录（通常 143）；
+          若服务器不支持 STARTTLS 会直接报错，不会明文提交授权码。
+        </div>
       </div>
 
       <hr>
@@ -64,8 +82,9 @@
         </div>
       </div>
       <div class="form-row">
-        <label class="flex items-center gap-2 cursor-pointer">{{ form.smtp_ssl }} 使用 SSL</label>
+        <label class="flex items-center gap-2 cursor-pointer">{{ form.smtp_ssl }} 使用 SSL（隐式 TLS，通常 465）</label>
         {{ form.smtp_ssl.errors }}
+        <div class="helptext">关闭时不加密连接，但只要服务器声明支持 STARTTLS 就会自动升级（通常 587）。</div>
       </div>
 
       <hr>
@@ -110,4 +129,10 @@
     </div>
   </form>
 </div>
+{{ provider_presets|json_script:"provider-presets" }}
+{% endblock %}
+
+{% block extra_js %}
+{% load static %}
+<script src="{% static 'js/mailbox.js' %}"></script>
 {% endblock %}
