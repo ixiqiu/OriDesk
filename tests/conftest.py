@@ -68,6 +68,22 @@ def unified_mailbox(db) -> Mailbox:
 
 
 @pytest.fixture
+def authenticated_rule(unified_mailbox, tech_group):
+    """让统一邮箱收到含"登录"的邮件时能路由到技术支持组（避免无可用组而抛错）。"""
+    from apps.routing.models import Rule
+
+    return Rule.objects.create(
+        mailbox=unified_mailbox,
+        priority=10,
+        match_field="subject",
+        match_op="contains",
+        match_value="登录",
+        action_type="assign_group",
+        action_value=str(tech_group.pk),
+    )
+
+
+@pytest.fixture
 def fallback_mailbox(db) -> Mailbox:
     """全局兜底邮箱（全局唯一）。"""
     return make_mailbox(email="fallback@example.com", name="全局兜底邮箱", is_fallback=True)

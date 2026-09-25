@@ -25,6 +25,17 @@ class MailSyncError(Exception):
     """IMAP 同步失败。"""
 
 
+def _status_value(status, key: str):
+    """兼容 folder_status 返回 bytes 或 str 键（imapclient 2.x/4.x 差异）。"""
+    for candidate in (key.encode("ascii"), key):
+        try:
+            if candidate in status:
+                return status[candidate]
+        except TypeError:  # pragma: no cover - 非映射类型
+            return None
+    return None
+
+
 def sync_mailbox(mailbox: Mailbox, *, limit: int | None = None, now=None) -> dict:
     """增量拉取指定邮箱的新邮件，返回统计信息。"""
     from imapclient import IMAPClient
@@ -43,7 +54,7 @@ def sync_mailbox(mailbox: Mailbox, *, limit: int | None = None, now=None) -> dic
         client.select_folder("INBOX")
 
         status = client.folder_status("INBOX")
-        uidvalidity = int(status.get(b"UIDVALIDITY") or 0)
+        uidvalidity = int(_status_value(status, "UIDVALIDITY") or 0)
         last_uid = mailbox.last_uid
         if uidvalidity and uidvalidity != mailbox.uidvalidity:
             logger.warning(
