@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}审计详情 #{{ log.pk }} · {{ site_name }}{% endblock %}
+{% block page_title %}审计详情 #{{ log.pk }}{% endblock %}
+{% block page_subtitle %}
+  <div class="text-muted text-sm mt-1">
+    {{ log.get_action_display }} · {{ log.created_at|date:"Y-m-d H:i:s" }}
+    {% if log.user %} · 操作人 {{ log.user.display_name }}{% else %} · 系统{% endif %}
+  </div>
+{% endblock %}
+{% block page_actions %}
+  <a class="btn" href="{% url 'audit:log_list' %}">返回列表</a>
+{% endblock %}
+
+{% block content %}
+<div class="flex gap-4 items-start flex-wrap">
+  <div style="flex:1 1 560px; min-width:320px">
+    <div class="card">
+      <div class="card-header"><h2 style="margin:0">明细（detail）</h2></div>
+      <div class="card-body">
+        <pre class="whitespace-pre-wrap">{{ detail_json }}</pre>
+      </div>
+    </div>
+  </div>
+
+  <aside style="flex:0 1 340px; min-width:280px">
+    <div class="card">
+      <div class="card-header"><h2 style="margin:0">关联对象</h2></div>
+      <div class="card-body text-sm">
+        <div class="flex justify-between py-2 border-b">
+          <span class="text-muted">时间</span>
+          <span>{{ log.created_at|date:"Y-m-d H:i:s" }}</span>
+        </div>
+        <div class="flex justify-between py-2 border-b">
+          <span class="text-muted">动作</span>
+          <span>{{ log.get_action_display }}</span>
+        </div>
+        <div class="flex justify-between py-2 border-b">
+          <span class="text-muted">操作人</span>
+          <span>{% if log.user %}{{ log.user.display_name }}{% else %}系统{% endif %}</span>
+        </div>
+        <div class="flex justify-between py-2 border-b">
+          <span class="text-muted">工单</span>
+          <span>
+            {% if log.ticket_id %}
+              {% if ticket_visible %}
+                <a href="{% url 'tickets:detail' log.ticket_id %}">[T#{{ log.ticket_id }}] {{ log.ticket.subject|truncatechars:30 }}</a>
+              {% else %}
+                <span class="text-muted">[T#{{ log.ticket_id }}]（无可见权限）</span>
+              {% endif %}
+            {% else %}
+              —
+            {% endif %}
+          </span>
+        </div>
+        <div class="flex justify-between py-2 border-b">
+          <span class="text-muted">组</span>
+          <span>{{ log.group.name|default:"—" }}</span>
+        </div>
+        <div class="flex justify-between py-2 border-b">
+          <span class="text-muted">对外身份</span>
+          <span>{{ log.identity_email|default:"—" }}</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+</div>
+{% endblock %}

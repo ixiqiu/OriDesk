@@ -1,0 +1,44 @@
+{% load ui %}
+<div id="inbox-table">
+  {% if tickets %}
+  <div class="card">
+    <table class="table">
+      <thead>
+        <tr>
+          <th style="width:70px">工单号</th>
+          <th>主题</th>
+          <th style="width:200px">客户</th>
+          <th style="width:130px">归属组</th>
+          <th style="width:110px">认领人</th>
+          <th style="width:150px">状态</th>
+          <th style="width:150px">最后消息</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ticket in tickets %}
+        <tr>
+          <td><a href="{% url 'tickets:detail' ticket.pk %}">T#{{ ticket.pk }}</a></td>
+          <td>
+            <a href="{% url 'tickets:detail' ticket.pk %}" class="font-medium">{{ ticket.subject|truncatechars:80 }}</a>
+            {% if ticket.assignee_id and ticket.assignee_id == user.pk %}
+              <span class="badge badge-claimed ml-1">我认领的</span>
+            {% endif %}
+          </td>
+          <td class="text-sm">{{ ticket.customer_email }}</td>
+          <td class="text-sm">{{ ticket.group.name }}</td>
+          <td class="text-sm">{% if ticket.assignee %}{{ ticket.assignee.display_name }}{% else %}<span class="text-muted">未认领</span>{% endif %}</td>
+          <td>{{ ticket|status_badge }} {{ ticket|awaiting_badge }}</td>
+          <td class="text-sm text-muted">{{ ticket.last_message_at|date:"Y-m-d H:i" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "partials/_pagination.html" %}
+  {% else %}
+  <div class="card"><div class="empty">
+    <p>没有符合条件的工单。</p>
+    <p class="text-muted text-sm">调整筛选条件，或等待 IMAP 同步拉取新邮件。</p>
+  </div></div>
+  {% endif %}
+</div>

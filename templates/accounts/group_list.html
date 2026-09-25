@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}用户组管理 · {{ site_name }}{% endblock %}
+{% block page_title %}用户组管理{% endblock %}
+{% block page_subtitle %}
+  <div class="text-muted text-sm mt-1">共 {{ page_obj.paginator.count }} 个用户组 · 每页 25 条</div>
+{% endblock %}
+{% block page_actions %}
+  <a class="btn btn-primary" href="{% url 'accounts:group_create' %}">新建用户组</a>
+{% endblock %}
+
+{% block content %}
+{% if not has_admin_group %}
+<div class="alert alert-warning mb-4">
+  系统当前没有任何管理员组：未命中路由规则的工单将无法进入管理员池，兜底路由会失败。
+  请至少创建一个「管理员组」并为其配置对外邮箱（§2.2 / §2.7）。
+</div>
+{% endif %}
+{% if not has_fallback_mailbox %}
+<div class="alert alert-warning mb-4">
+  尚未配置全局兜底邮箱：无邮箱组的对外回信将无法发出（§2.1）。
+</div>
+{% endif %}
+
+<div class="card">
+  {% if groups %}
+  <table class="table">
+    <thead>
+      <tr>
+        <th>名称</th>
+        <th>对外邮箱</th>
+        <th>对外身份邮箱</th>
+        <th>管理员组</th>
+        <th>成员数</th>
+        <th>工单数</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for group in groups %}
+      <tr>
+        <td><a href="{% url 'accounts:group_edit' group.pk %}">{{ group.name }}</a></td>
+        <td>
+          {% if group.mailbox %}
+            {{ group.mailbox.email }}
+            {% if not group.mailbox.is_active %}<span class="badge badge-danger">已停用</span>{% endif %}
+          {% else %}
+            <span class="text-warning">无邮箱，回信走全局兜底邮箱</span>
+          {% endif %}
+        </td>
+        <td>{{ group.identity_email|default:"—（无可用邮箱）" }}</td>
+        <td>{% if group.is_admin_group %}<span class="badge badge-open">是</span>{% else %}<span class="text-muted">否</span>{% endif %}</td>
+        <td>{{ group.member_count }}</td>
+        <td>{{ group.ticket_count }}</td>
+        <td><a class="btn btn-sm" href="{% url 'accounts:group_edit' group.pk %}">编辑</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">还没有任何用户组，请先创建。</div>
+  {% endif %}
+</div>
+
+{% include "partials/_pagination.html" %}
+{% endblock %}

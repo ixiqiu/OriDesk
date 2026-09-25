@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} · {{ site_name }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block page_subtitle %}
+  <div class="text-muted text-sm mt-1">
+    {% if group %}
+      保存后「{{ group.name }}」将使用专属模板；删除该模板可回落全局模板。
+    {% else %}
+      全局模板对该组之外的所有未覆盖组生效。
+    {% endif %}
+  </div>
+{% endblock %}
+{% block page_actions %}
+  <a class="btn" href="{% url 'autoresponder:template_list' %}">返回列表</a>
+{% endblock %}
+
+{% block content %}
+<div class="flex gap-4 items-start flex-wrap">
+  <div style="flex:1 1 560px; min-width:320px">
+    <div class="card">
+      <form method="post">
+        {% csrf_token %}
+        <div class="card-body">
+          {% if form.non_field_errors %}
+            <ul class="errorlist">{% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}</ul>
+          {% endif %}
+          <div class="form-row">
+            <label for="{{ form.body.id_for_label }}">{{ form.body.label }}</label>
+            {{ form.body }}
+            <div class="help">{{ form.body.help_text }}</div>
+            {% if form.body.errors %}<ul class="errorlist">{% for error in form.body.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+          </div>
+          {% if existing %}
+            <div class="help">最近保存：{{ existing.updated_at|date:"Y-m-d H:i" }}</div>
+          {% endif %}
+        </div>
+        <div class="card-footer flex items-center justify-between">
+          <span class="text-muted text-xs">「预览」只刷新右侧渲染结果，不会保存。</span>
+          <div class="flex gap-2">
+            <button class="btn" type="submit" name="_preview" value="1">预览</button>
+            <button class="btn btn-primary" type="submit" name="_save" value="1">保存模板</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <aside style="flex:0 1 420px; min-width:300px">
+    <div class="card">
+      <div class="card-header">
+        <h2 style="margin:0">实时预览</h2>
+        <span class="text-muted text-xs">示例上下文</span>
+      </div>
+      <div class="card-body">
+        <pre class="whitespace-pre-wrap">{{ preview }}</pre>
+      </div>
+      <div class="card-footer text-muted text-xs">
+        示例数据：工单 [T#1234]、客户 customer@example.com{% if group %}、组「{{ group.name }}」{% endif %}。
+      </div>
+    </div>
+
+    <div class="card mt-4">
+      <div class="card-header"><h2 style="margin:0">可用变量</h2></div>
+      <div class="card-body">
+        <div class="flex flex-wrap gap-2">
+          {% for name in variables %}
+            <span class="badge badge-open mono">{% templatetag openvariable %} {{ name }} {% templatetag closevariable %}</span>
+          {% endfor %}
+        </div>
+        <div class="help mt-2">语法为 Django 模板变量，未识别的变量渲染为空字符串。</div>
+      </div>
+    </div>
+
+    {% if not existing %}
+    <div class="card mt-4">
+      <div class="card-header"><h2 style="margin:0">内置默认模板</h2></div>
+      <div class="card-body">
+        <pre class="whitespace-pre-wrap">{{ default_template }}</pre>
+      </div>
+    </div>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

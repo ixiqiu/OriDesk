@@ -1,0 +1,81 @@
+{% load static %}<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ site_name }}{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  {% block extra_head %}{% endblock %}
+</head>
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+{% load ui %}
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand">{{ site_name }}</div>
+    <div class="brand-sub">邮箱工单管理系统 v{{ app_version }}</div>
+    <nav>
+      <div class="nav-section">工单</div>
+      <a href="{% url 'tickets:inbox' %}" class="{% nav_active 'tickets:inbox' %}">收件箱</a>
+      <a href="{% url 'tickets:awaiting' %}" class="{% nav_active 'tickets:awaiting' %}">
+        <span>待回复</span>
+        {% if nav_awaiting_total %}<span class="badge badge-awaiting">{{ nav_awaiting_total }}</span>{% endif %}
+      </a>
+      <a href="{% url 'tickets:mine' %}" class="{% nav_active 'tickets:mine' %}">我的工单</a>
+      <a href="{% url 'tickets:unassigned' %}" class="{% nav_active 'tickets:unassigned' %}">
+        <span>待认领</span>
+        {% if unassigned_count %}<span class="badge badge-closed">{{ unassigned_count }}</span>{% endif %}
+      </a>
+
+      {% if nav_groups %}
+      <div class="nav-section">用户组</div>
+      {% for group in nav_groups %}
+        <a href="{% url 'tickets:inbox' %}?group={{ group.pk }}">{{ group.name }}</a>
+      {% endfor %}
+      {% endif %}
+
+      {% if can_manage %}
+      <div class="nav-section">管理</div>
+      <a href="{% url 'routing:rule_list' %}" class="{% nav_active 'routing:rule_list' %}">路由规则</a>
+      <a href="{% url 'autoresponder:template_list' %}" class="{% nav_active 'autoresponder:template_list' %}">自动回复</a>
+      <a href="{% url 'routing:settings' %}" class="{% nav_active 'routing:settings' %}">系统设置</a>
+      <a href="{% url 'routing:mailbox_overview' %}" class="{% nav_active 'routing:mailbox_overview' %}">邮箱与同步</a>
+      <a href="{% url 'audit:log_list' %}" class="{% nav_active 'audit:log_list' %}">审计日志</a>
+      {% endif %}
+
+      {% if can_manage_users %}
+      <div class="nav-section">系统</div>
+      <a href="{% url 'accounts:user_list' %}" class="{% nav_active 'accounts:user_list' %}">用户管理</a>
+      <a href="{% url 'accounts:group_list' %}" class="{% nav_active 'accounts:group_list' %}">用户组管理</a>
+      <a href="{% url 'accounts:mailbox_list' %}" class="{% nav_active 'accounts:mailbox_list' %}">邮箱配置</a>
+      {% endif %}
+      {% if user.is_staff %}
+      <a href="{% url 'admin:index' %}">Django Admin</a>
+      {% endif %}
+    </nav>
+    <div class="sidebar-footer">
+      <a href="{% url 'accounts:profile' %}" style="color:#94a3b8">{{ user.display_name }}</a>
+      <form method="post" action="{% url 'accounts:logout' %}" style="display:inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-sm" style="margin-top:8px">退出登录</button>
+      </form>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div>
+        <h1 style="margin:0">{% block page_title %}收件箱{% endblock %}</h1>
+        {% block page_subtitle %}{% endblock %}
+      </div>
+      <div class="flex items-center gap-2">{% block page_actions %}{% endblock %}</div>
+    </header>
+    <main class="content">
+      {% include "partials/_messages.html" %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+<script src="{% static 'vendor/htmx.min.js' %}"></script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

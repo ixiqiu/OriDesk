@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}{% if is_create %}新建邮箱{% else %}编辑邮箱{% endif %} · {{ site_name }}{% endblock %}
+{% block page_title %}{% if is_create %}新建邮箱{% else %}编辑邮箱{% if object %}：{{ object.name }}{% endif %}{% endif %}{% endblock %}
+{% block page_actions %}
+  <a class="btn" href="{% url 'accounts:mailbox_list' %}">返回邮箱列表</a>
+{% endblock %}
+
+{% block content %}
+<div class="card content-narrow">
+  <form method="post">
+    {% csrf_token %}
+    <div class="card-body">
+      {% if form.non_field_errors %}
+        <div class="alert alert-error mb-3">
+          {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+        </div>
+      {% endif %}
+
+      <div class="form-row">
+        <label for="{{ form.name.id_for_label }}">名称 <span class="text-danger">*</span></label>
+        {{ form.name }}
+        {{ form.name.errors }}
+      </div>
+
+      <div class="form-row">
+        <label for="{{ form.email.id_for_label }}">邮箱地址 <span class="text-danger">*</span></label>
+        {{ form.email }}
+        {{ form.email.errors }}
+      </div>
+
+      <hr>
+
+      <h3>IMAP（收信）</h3>
+      <div class="flex gap-3 flex-wrap">
+        <div class="form-row flex-1">
+          <label for="{{ form.imap_host.id_for_label }}">IMAP 主机</label>
+          {{ form.imap_host }}
+          {{ form.imap_host.errors }}
+        </div>
+        <div class="form-row" style="width:120px">
+          <label for="{{ form.imap_port.id_for_label }}">端口</label>
+          {{ form.imap_port }}
+          {{ form.imap_port.errors }}
+        </div>
+      </div>
+      <div class="form-row">
+        <label class="flex items-center gap-2 cursor-pointer">{{ form.imap_ssl }} 使用 SSL</label>
+        {{ form.imap_ssl.errors }}
+      </div>
+
+      <hr>
+
+      <h3>SMTP（发信）</h3>
+      <div class="flex gap-3 flex-wrap">
+        <div class="form-row flex-1">
+          <label for="{{ form.smtp_host.id_for_label }}">SMTP 主机</label>
+          {{ form.smtp_host }}
+          {{ form.smtp_host.errors }}
+        </div>
+        <div class="form-row" style="width:120px">
+          <label for="{{ form.smtp_port.id_for_label }}">端口</label>
+          {{ form.smtp_port }}
+          {{ form.smtp_port.errors }}
+        </div>
+      </div>
+      <div class="form-row">
+        <label class="flex items-center gap-2 cursor-pointer">{{ form.smtp_ssl }} 使用 SSL</label>
+        {{ form.smtp_ssl.errors }}
+      </div>
+
+      <hr>
+
+      <div class="form-row">
+        <label for="{{ form.username.id_for_label }}">登录账号 <span class="text-danger">*</span></label>
+        {{ form.username }}
+        {{ form.username.errors }}
+      </div>
+
+      <div class="form-row">
+        <label for="{{ form.secret.id_for_label }}">授权码 / 密码{% if is_create %} <span class="text-danger">*</span>{% endif %}</label>
+        {{ form.secret }}
+        {% if form.secret.help_text %}<div class="helptext">{{ form.secret.help_text }}</div>{% endif %}
+        {{ form.secret.errors }}
+        {% if not is_create and object %}
+        <div class="helptext">
+          当前凭据：{% if object.secret_encrypted %}已配置（密文存储）{% else %}未配置{% endif %}，留空即保持不变。
+        </div>
+        {% endif %}
+      </div>
+
+      <hr>
+
+      <div class="form-row">
+        <label class="flex items-center gap-2 cursor-pointer">{{ form.is_fallback }} 设为全局兜底邮箱</label>
+        {{ form.is_fallback.errors }}
+        <div class="helptext">
+          全局唯一：整个系统只能有一个兜底邮箱，无邮箱组的对外回信都走它（§2.1）。
+          勾选后该邮箱必须保持启用。
+        </div>
+      </div>
+
+      <div class="form-row">
+        <label class="flex items-center gap-2 cursor-pointer">{{ form.is_active }} 启用（参与收信与同步）</label>
+        {{ form.is_active.errors }}
+      </div>
+    </div>
+    <div class="card-footer flex items-center justify-between">
+      <a class="btn" href="{% url 'accounts:mailbox_list' %}">取消</a>
+      <button class="btn btn-primary" type="submit">{% if is_create %}创建邮箱{% else %}保存修改{% endif %}</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

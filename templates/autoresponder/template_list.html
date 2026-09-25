@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}自动回复模板 · {{ site_name }}{% endblock %}
+{% block page_title %}自动回复模板{% endblock %}
+{% block page_subtitle %}
+  <div class="text-muted text-sm mt-1">
+    模板解析顺序：组覆盖 &gt; 全局 &gt; 代码内置默认模板（开发文档 §5.3）。
+  </div>
+{% endblock %}
+{% block page_actions %}
+  <a class="btn btn-primary" href="{% url 'autoresponder:template_edit' %}">编辑全局模板</a>
+{% endblock %}
+
+{% block content %}
+<div class="card mb-4">
+  <div class="card-header">
+    <h2 style="margin:0">全局模板</h2>
+    <span class="text-muted text-xs">未配置专属模板的所有组都会使用这一套</span>
+  </div>
+  <div class="card-body">
+    {% if global_template %}
+      <div class="flex items-center justify-between mb-2">
+        <span class="badge badge-claimed">已配置</span>
+        <span class="text-muted text-xs">更新于 {{ global_template.updated_at|date:"Y-m-d H:i" }}</span>
+      </div>
+      <pre class="whitespace-pre-wrap">{{ global_template.body }}</pre>
+      <div class="form-actions">
+        <a class="btn" href="{% url 'autoresponder:template_edit' %}">编辑</a>
+      </div>
+    {% else %}
+      <div class="alert alert-warning mb-2">
+        数据库中还没有全局模板，系统当前使用代码内置默认模板（仍可正常发信）。
+      </div>
+      <pre class="whitespace-pre-wrap">{{ default_template }}</pre>
+      <div class="form-actions">
+        <a class="btn btn-primary" href="{% url 'autoresponder:template_edit' %}">创建全局模板</a>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header">
+    <h2 style="margin:0">各组模板状态</h2>
+    <span class="text-muted text-xs">已配置专属模板的组：{{ group_template_count }} 个</span>
+  </div>
+  <div class="overflow-auto">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>用户组</th>
+          <th>模板来源</th>
+          <th>对外身份</th>
+          <th>更新时间</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td>{{ row.group.name }}</td>
+          <td>
+            {% if row.template %}
+              <span class="badge badge-open">该组使用专属模板</span>
+            {% else %}
+              <span class="badge badge-closed">使用全局模板</span>
+            {% endif %}
+          </td>
+          <td>{{ row.group.identity_email|default:"—" }}</td>
+          <td class="text-muted text-xs">{% if row.template %}{{ row.template.updated_at|date:"Y-m-d H:i" }}{% else %}—{% endif %}</td>
+          <td>
+            <div class="flex gap-2">
+              <a class="btn btn-sm" href="{% url 'autoresponder:group_template_edit' row.group.pk %}">
+                {% if row.template %}编辑专属模板{% else %}创建专属模板{% endif %}
+              </a>
+              {% if row.template %}
+              <form method="post" action="{% url 'autoresponder:group_template_delete' row.group.pk %}"
+                    onsubmit="return confirm('确定删除该组的专属模板？删除后该组将回落到全局模板。');">{% csrf_token %}
+                <button class="btn btn-sm btn-danger" type="submit">删除</button>
+              </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="empty">尚未创建任何用户组。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><h2 style="margin:0">可用模板变量</h2></div>
+  <div class="card-body">
+    <p class="text-muted text-sm">模板正文支持下列变量，发送时由系统按工单与组身份填充：</p>
+    <div class="flex flex-wrap gap-2">
+      {% for name in variables %}
+        <span class="badge badge-open mono">{% templatetag openvariable %} {{ name }} {% templatetag closevariable %}</span>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

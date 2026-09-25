@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}无权访问 · {{ site_name }}{% endblock %}
+{% block page_title %}403 · 无权访问{% endblock %}
+{% block content %}
+<div class="card"><div class="card-body">
+  <p>你的账号没有访问该页面或执行该操作的权限。</p>
+  <p class="text-muted">如果你认为这是误判，请联系管理员把你加入对应的用户组。</p>
+  <a class="btn btn-primary" href="{% url 'tickets:inbox' %}">返回收件箱</a>
+</div></div>
+{% endblock %}

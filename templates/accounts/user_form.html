@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}{% if is_create %}新建用户{% else %}编辑用户{% endif %} · {{ site_name }}{% endblock %}
+{% block page_title %}{% if is_create %}新建用户{% else %}编辑用户{% if object %}：{{ object.display_name }}{% endif %}{% endif %}{% endblock %}
+{% block page_actions %}
+  <a class="btn" href="{% url 'accounts:user_list' %}">返回用户列表</a>
+{% endblock %}
+
+{% block content %}
+<div class="card content-narrow">
+  <form method="post">
+    {% csrf_token %}
+    <div class="card-body">
+      {% if form.non_field_errors %}
+        <div class="alert alert-error mb-3">
+          {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+        </div>
+      {% endif %}
+
+      <div class="form-row">
+        <label for="{{ form.username.id_for_label }}">用户名 <span class="text-danger">*</span></label>
+        {{ form.username }}
+        {{ form.username.errors }}
+      </div>
+
+      <div class="flex gap-3 flex-wrap">
+        <div class="form-row flex-1">
+          <label for="{{ form.first_name.id_for_label }}">名</label>
+          {{ form.first_name }}
+          {{ form.first_name.errors }}
+        </div>
+        <div class="form-row flex-1">
+          <label for="{{ form.last_name.id_for_label }}">姓</label>
+          {{ form.last_name }}
+          {{ form.last_name.errors }}
+        </div>
+      </div>
+
+      <div class="form-row">
+        <label for="{{ form.email.id_for_label }}">邮箱</label>
+        {{ form.email }}
+        {{ form.email.errors }}
+      </div>
+
+      <div class="form-row">
+        <label for="{{ form.password.id_for_label }}">密码{% if is_create %} <span class="text-danger">*</span>{% endif %}</label>
+        {{ form.password }}
+        {% if form.password.help_text %}<div class="helptext">{{ form.password.help_text }}</div>{% endif %}
+        {{ form.password.errors }}
+      </div>
+
+      <div class="form-row">
+        <label>账号状态与权限</label>
+        <label class="flex items-center gap-2 cursor-pointer">
+          {{ form.is_active }} 启用（允许登录）
+        </label>
+        {{ form.is_active.errors }}
+        <label class="flex items-center gap-2 cursor-pointer mt-1">
+          {{ form.is_superadmin }} 超级管理员（可管理所有组、邮箱与配置）
+        </label>
+        {{ form.is_superadmin.errors }}
+        <div class="helptext">系统必须保留至少一名启用状态的超级管理员。</div>
+      </div>
+
+      <hr>
+
+      <div class="form-row">
+        <label for="{{ form.groups.id_for_label }}">所属组</label>
+        {{ form.groups }}
+        <div class="helptext">一个用户可同时属于多个用户组（§2.7）。</div>
+        {{ form.groups.errors }}
+      </div>
+
+      <div class="form-row">
+        <label>组内管理员身份</label>
+        <div class="helptext mb-2">勾选表示该用户在对应组内拥有管理员身份，可跨组查看工单。</div>
+        {% for row in form.admin_fields %}
+          <label class="flex items-center gap-2 cursor-pointer py-2">
+            {{ row.field }} {{ row.group.name }}
+          </label>
+          {{ row.field.errors }}
+        {% empty %}
+          <div class="text-muted">系统中还没有任何用户组，请先创建用户组。</div>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="card-footer flex items-center justify-between">
+      <a class="btn" href="{% url 'accounts:user_list' %}">取消</a>
+      <button class="btn btn-primary" type="submit">{% if is_create %}创建用户{% else %}保存修改{% endif %}</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}系统设置 · {{ site_name }}{% endblock %}
+{% block page_title %}系统设置{% endblock %}
+{% block page_subtitle %}
+  <div class="text-muted text-sm mt-1">
+    开发文档 §4.6 的六项关键配置；每次保存都会逐项写入审计日志（谁在何时改了哪一项）。
+  </div>
+{% endblock %}
+{% block page_actions %}
+  <a class="btn" href="{% url 'routing:rule_list' %}">路由规则</a>
+  <a class="btn" href="{% url 'routing:mailbox_overview' %}">邮箱与同步</a>
+{% endblock %}
+
+{% block content %}
+<div class="flex gap-4 items-start flex-wrap">
+  <div style="flex:1 1 620px; min-width:320px">
+    <div class="card">
+      <form method="post">
+        {% csrf_token %}
+        <div class="card-body">
+          {% if form.non_field_errors %}
+            <ul class="errorlist">{% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}</ul>
+          {% endif %}
+
+          <h3>路由与粘性</h3>
+          <div class="form-row">
+            <label for="{{ form.sticky_window_days.id_for_label }}">{{ form.sticky_window_days.label }}</label>
+            {{ form.sticky_window_days }}
+            <div class="help">{{ form.sticky_window_days.help_text }}</div>
+            {% if form.sticky_window_days.errors %}<ul class="errorlist">{% for error in form.sticky_window_days.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+          </div>
+          <div class="form-row">
+            <label for="{{ form.first_contact_window_hours.id_for_label }}">{{ form.first_contact_window_hours.label }}</label>
+            {{ form.first_contact_window_hours }}
+            <div class="help">{{ form.first_contact_window_hours.help_text }}</div>
+            {% if form.first_contact_window_hours.errors %}<ul class="errorlist">{% for error in form.first_contact_window_hours.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+          </div>
+          <div class="form-row">
+            <label for="{{ form.fallback_group_id.id_for_label }}">{{ form.fallback_group_id.label }}</label>
+            {{ form.fallback_group_id }}
+            <div class="help">{{ form.fallback_group_id.help_text }}</div>
+            {% if form.fallback_group_id.errors %}<ul class="errorlist">{% for error in form.fallback_group_id.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+          </div>
+
+          <h3 class="mt-3">邮箱与附件</h3>
+          <div class="form-row">
+            <label for="{{ form.fallback_mailbox_id.id_for_label }}">{{ form.fallback_mailbox_id.label }}</label>
+            {{ form.fallback_mailbox_id }}
+            <div class="help">{{ form.fallback_mailbox_id.help_text }}</div>
+            {% if form.fallback_mailbox_id.errors %}<ul class="errorlist">{% for error in form.fallback_mailbox_id.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+          </div>
+          <div class="form-row">
+            <label for="{{ form.max_attachment_size_mb.id_for_label }}">{{ form.max_attachment_size_mb.label }}</label>
+            {{ form.max_attachment_size_mb }}
+            <div class="help">{{ form.max_attachment_size_mb.help_text }}</div>
+            {% if form.max_attachment_size_mb.errors %}<ul class="errorlist">{% for error in form.max_attachment_size_mb.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+          </div>
+          <div class="form-row">
+            <label for="{{ form.imap_poll_interval_seconds.id_for_label }}">{{ form.imap_poll_interval_seconds.label }}</label>
+            {{ form.imap_poll_interval_seconds }}
+            <div class="help">{{ form.imap_poll_interval_seconds.help_text }}</div>
+            {% if form.imap_poll_interval_seconds.errors %}<ul class="errorlist">{% for error in form.imap_poll_interval_seconds.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+          </div>
+        </div>
+        <div class="card-footer flex items-center justify-between">
+          <span class="text-muted text-xs">默认值：粘性 7 天 · 首触 24 小时 · 附件 25 MB · 轮询 60 秒。</span>
+          <button class="btn btn-primary" type="submit">保存设置</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <aside style="flex:0 1 340px; min-width:280px">
+    <div class="card">
+      <div class="card-header"><h2 style="margin:0">兜底配置状态</h2></div>
+      <div class="card-body text-sm">
+        <div class="py-2 border-b">
+          <div class="flex justify-between">
+            <span class="text-muted">兜底组</span>
+            {% if fallback_group %}
+              <span class="text-success">{{ fallback_group.name }}</span>
+            {% else %}
+              <span class="text-warning">未配置</span>
+            {% endif %}
+          </div>
+          {% if not fallback_group %}
+          <div class="help">
+            未配置后果：未命中任何规则的来信将进入管理员组
+            {% if admin_group %}「{{ admin_group.name }}」{% else %}，但当前系统连管理员组都没有，路由会直接失败{% endif %}。
+          </div>
+          {% endif %}
+        </div>
+        <div class="py-2 border-b">
+          <div class="flex justify-between">
+            <span class="text-muted">兜底邮箱（配置项）</span>
+            {% if fallback_mailbox %}
+              <span class="text-success">{{ fallback_mailbox.email }}</span>
+            {% else %}
+              <span class="text-warning">未配置</span>
+            {% endif %}
+          </div>
+          {% if not fallback_mailbox %}
+          <div class="help">
+            未配置后果：无邮箱组对外发信时没有可用身份；若已有邮箱勾选了「全局兜底」标记，
+            系统仍会回落到它。
+          </div>
+          {% endif %}
+        </div>
+        <div class="py-2">
+          <div class="flex justify-between">
+            <span class="text-muted">实际生效的兜底邮箱</span>
+            {% if effective_fallback_mailbox %}
+              <span class="text-success">{{ effective_fallback_mailbox.email }}</span>
+            {% else %}
+              <span class="text-danger">无</span>
+            {% endif %}
+          </div>
+          <div class="help">解析顺序：配置项 fallback_mailbox_id &gt; 邮箱上的「全局兜底」标记。</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mt-4">
+      <div class="card-header"><h2 style="margin:0">当前生效值</h2></div>
+      <div class="card-body text-sm">
+        <div class="flex justify-between py-2 border-b"><span class="text-muted">短期粘性</span><span>{{ sticky_days }} 天</span></div>
+        <div class="flex justify-between py-2 border-b"><span class="text-muted">首次进线窗口</span><span>{{ first_contact_hours }} 小时</span></div>
+        <div class="flex justify-between py-2 border-b"><span class="text-muted">附件上限</span><span>{{ max_attachment_mb }} MB</span></div>
+        <div class="flex justify-between py-2"><span class="text-muted">IMAP 轮询间隔</span><span>{{ imap_poll_seconds }} 秒</span></div>
+      </div>
+    </div>
+
+    <div class="card mt-4">
+      <div class="card-header"><h2 style="margin:0">取值校验</h2></div>
+      <div class="card-body text-sm text-muted">
+        <ul class="list-none">
+          <li class="py-1 border-b">粘性天数：1 - 365 的正整数</li>
+          <li class="py-1 border-b">首触窗口：正整数小时（最长 8760）</li>
+          <li class="py-1 border-b">附件上限：1 - 100 MB</li>
+          <li class="py-1">IMAP 轮询间隔：≥ 10 秒</li>
+        </ul>
+      </div>
+    </div>
+  </aside>
+</div>
+{% endblock %}

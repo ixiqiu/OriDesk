@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}邮箱与同步 · {{ site_name }}{% endblock %}
+{% block page_title %}邮箱与同步{% endblock %}
+{% block page_subtitle %}
+  <div class="text-muted text-sm mt-1">
+    邮箱类型由绑定关系决定：组专用（绑定用户组）→ 直接进组；全局兜底；统一进线（参与规则路由）。
+  </div>
+{% endblock %}
+{% block page_actions %}
+  <a class="btn" href="{% url 'routing:settings' %}">系统设置</a>
+  <a class="btn" href="{% url 'routing:rule_list' %}">路由规则</a>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <h2 style="margin:0">邮箱列表</h2>
+    <span class="text-muted text-xs">共 {{ rows|length }} 个邮箱；增量位点用于判断下一轮 IMAP 拉取范围（§6.4）</span>
+  </div>
+  <div class="overflow-auto">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>名称 / 地址</th>
+          <th>类型</th>
+          <th>绑定组</th>
+          <th>对外身份</th>
+          <th>状态</th>
+          <th>IMAP / SMTP</th>
+          <th>增量同步状态</th>
+          <th>规则</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td>
+            {{ row.mailbox.name }}
+            <div class="text-muted text-xs">{{ row.mailbox.email }}</div>
+          </td>
+          <td>
+            {% if row.kind == 'group' %}<span class="badge badge-open">{{ row.kind_label }}</span>
+            {% elif row.kind == 'fallback' %}<span class="badge badge-awaiting">{{ row.kind_label }}</span>
+            {% else %}<span class="badge badge-closed">{{ row.kind_label }}</span>{% endif %}
+          </td>
+          <td>{% if row.group %}{{ row.group.name }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+          <td>{{ row.identity_email|default:"—" }}</td>
+          <td>
+            {% if row.mailbox.is_active %}<span class="badge badge-claimed">已启用</span>
+            {% else %}<span class="badge badge-danger">已停用</span>{% endif %}
+            {% if row.mailbox.is_fallback %}<span class="badge badge-awaiting">兜底标记</span>{% endif %}
+          </td>
+          <td class="text-xs mono">
+            IMAP {{ row.mailbox.imap_host }}:{{ row.mailbox.imap_port }}{% if row.mailbox.imap_ssl %} (SSL){% endif %}<br>
+            SMTP {{ row.mailbox.smtp_host }}:{{ row.mailbox.smtp_port }}{% if row.mailbox.smtp_ssl %} (SSL){% endif %}
+          </td>
+          <td class="text-xs mono">
+            last_uid={{ row.mailbox.last_uid }}<br>
+            uidvalidity={{ row.mailbox.uidvalidity }}
+          </td>
+          <td>{{ row.rule_count }}</td>
+          <td>
+            <form method="post" action="{% url 'routing:mailbox_overview' %}">{% csrf_token %}
+              <input type="hidden" name="mailbox_id" value="{{ row.mailbox.pk }}">
+              <button class="btn btn-sm" type="submit">立即同步</button>
+            </form>
+            <div class="help">Redis 不可用时同步执行，期间页面会等待。</div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="9" class="empty">尚未配置任何邮箱，请先在「邮箱配置」中创建。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

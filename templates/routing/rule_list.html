@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}路由规则 · {{ site_name }}{% endblock %}
+{% block page_title %}路由规则{% endblock %}
+{% block page_subtitle %}
+  <div class="text-muted text-sm mt-1">
+    按优先级匹配（数字越小越优先，第一条命中即停）；未命中任何规则时进入兜底组或管理员池。
+  </div>
+{% endblock %}
+{% block page_actions %}
+  <a class="btn btn-primary" href="{% url 'routing:rule_create' %}">新建规则</a>
+  <a class="btn" href="{% url 'routing:settings' %}">系统设置</a>
+{% endblock %}
+
+{% block content %}
+<div class="card mb-4">
+  <div class="card-header">
+    <h2 style="margin:0">规则试算</h2>
+    <span class="text-muted text-xs">只读：不会创建工单、不会发信、不会修改任何数据</span>
+  </div>
+  <form method="post" action="{% url 'routing:rule_list' %}">
+    {% csrf_token %}
+    <div class="card-body">
+      {% if trial_form.non_field_errors %}
+        <ul class="errorlist">{% for error in trial_form.non_field_errors %}<li>{{ error }}</li>{% endfor %}</ul>
+      {% endif %}
+      <div class="flex flex-wrap gap-3 items-end">
+        <div style="min-width:220px">
+          <label for="{{ trial_form.mailbox.id_for_label }}">{{ trial_form.mailbox.label }}</label>
+          {{ trial_form.mailbox }}
+          {% if trial_form.mailbox.errors %}<ul class="errorlist">{% for error in trial_form.mailbox.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+        </div>
+        <div style="min-width:200px">
+          <label for="{{ trial_form.subject.id_for_label }}">主题</label>
+          {{ trial_form.subject }}
+        </div>
+        <div style="min-width:200px">
+          <label for="{{ trial_form.sender.id_for_label }}">发件人</label>
+          {{ trial_form.sender }}
+        </div>
+        <div style="min-width:200px">
+          <label for="{{ trial_form.to.id_for_label }}">收件人</label>
+          {{ trial_form.to }}
+        </div>
+      </div>
+      <div class="form-row mt-3">
+        <label for="{{ trial_form.body.id_for_label }}">正文</label>
+        {{ trial_form.body }}
+      </div>
+      <div class="help">
+        试算会考虑粘性：同发件人 {{ sticky_days }} 天内有工单时，归原组（优先级高于规则匹配）。
+        组专用邮箱的来信直接进入绑定组，不参与规则匹配。
+      </div>
+    </div>
+    <div class="card-footer text-right">
+      <button class="btn btn-primary" type="submit">试算</button>
+    </div>
+  </form>
+
+  {% if trial_result %}
+  <div class="card-body border-t">
+    <h3>试算结果</h3>
+    <div class="text-sm">
+      <div class="flex justify-between py-2 border-b">
+        <span class="text-muted">入口邮箱</span>
+        <span>{{ trial_result.mailbox.email }}（{{ trial_result.kind_label }}）</span>
+      </div>
+      <div class="flex justify-between py-2 border-b">
+        <span class="text-muted">发件人（归一化）</span>
+        <span>{{ trial_result.sender|default:"—" }}</span>
+      </div>
+      <div class="flex justify-between py-2 border-b">
+        <span class="text-muted">命中规则</span>
+        <span>
+          {% if trial_result.matched_rule %}
+            <span class="badge badge-open">#{{ trial_result.matched_rule.priority }}</span>
+            {{ trial_result.matched_rule.get_match_field_display }}{{ trial_result.matched_rule.get_match_op_display }}「{{ trial_result.matched_rule.match_value }}」
+            → {{ trial_result.matched_rule.get_action_type_display }}：{{ trial_result.matched_rule.action_value }}
+          {% else %}
+            未命中任何规则
+          {% endif %}
+        </span>
+      </div>
+      <div class="flex justify-between py-2 border-b">
+        <span class="text-muted">粘性工单</span>
+        <span>
+          {% if trial_result.sticky_ticket %}
+            [T#{{ trial_result.sticky_ticket.pk }}]（{{ trial_result.sticky_ticket.last_message_at|date:"Y-m-d H:i" }}）→ 归原组
+          {% else %}
+            无（未命中 {{ trial_result.sticky_window_days }} 天粘性窗口）
+          {% endif %}
+        </span>
+      </div>
+      <div class="flex justify-between py-2">
+        <span class="text-muted">最终归属组</span>
+        <span>
+          {% if trial_result.group %}
+            <strong>{{ trial_result.group.name }}</strong>
+            {% if trial_result.kind == 'group' %}（组专用邮箱直接进组）{% endif %}
+          {% elif trial_result.error %}
+            <span class="text-danger">{{ trial_result.error }}</span>
+          {% else %}
+            —
+          {% endif %}
+        </span>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h2 style="margin:0">规则列表</h2>
+    <span class="text-muted text-xs">共 {{ page_obj.paginator.count }} 条</span>
+  </div>
+  <div class="overflow-auto">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>优先级</th>
+          <th>入口邮箱</th>
+          <th>匹配条件</th>
+          <th>动作</th>
+          <th>是否启用</th>
+          <th>创建时间</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for rule in rules %}
+        <tr>
+          <td>{{ rule.priority }}</td>
+          <td>{{ rule.mailbox.name }}<div class="text-muted text-xs">{{ rule.mailbox.email }}</div></td>
+          <td>{{ rule.get_match_field_display }}{{ rule.get_match_op_display }}<span class="mono">{{ rule.match_value }}</span></td>
+          <td>{{ rule.get_action_type_display }}：<span class="mono">{{ rule.action_value }}</span></td>
+          <td>
+            {% if rule.enabled %}<span class="badge badge-claimed">已启用</span>
+            {% else %}<span class="badge badge-closed">已停用</span>{% endif %}
+          </td>
+          <td class="text-muted text-xs">{{ rule.created_at|date:"Y-m-d H:i" }}</td>
+          <td>
+            <div class="flex gap-2">
+              <form method="post" action="{% url 'routing:rule_toggle' rule.pk %}">{% csrf_token %}
+                <button class="btn btn-sm" type="submit">{% if rule.enabled %}停用{% else %}启用{% endif %}</button>
+              </form>
+              <a class="btn btn-sm" href="{% url 'routing:rule_edit' rule.pk %}">编辑</a>
+              <form method="post" action="{% url 'routing:rule_delete' rule.pk %}"
+                    onsubmit="return confirm('确定删除该规则？删除后不可恢复。');">{% csrf_token %}
+                <button class="btn btn-sm btn-danger" type="submit">删除</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="empty">暂无路由规则，点击右上角「新建规则」创建。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% include "partials/_pagination.html" %}
+{% endblock %}

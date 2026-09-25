@@ -1,0 +1,42 @@
+{% load static %}<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>登录 · {{ site_name }}</title>
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+</head>
+<body class="auth-page">
+  <div class="auth-card">
+    <h1>{{ site_name }}</h1>
+    <div class="sub">邮箱工单管理系统 v{{ app_version }}</div>
+
+    {% if form.non_field_errors %}
+      <div class="alert alert-error mb-3">
+        {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+      </div>
+    {% endif %}
+
+    <form method="post" action="{% url 'accounts:login' %}">
+      {% csrf_token %}
+      {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+
+      <div class="form-row">
+        <label for="{{ form.username.id_for_label }}">用户名</label>
+        {{ form.username }}
+        {{ form.username.errors }}
+      </div>
+
+      <div class="form-row">
+        <label for="{{ form.password.id_for_label }}">密码</label>
+        {{ form.password }}
+        {{ form.password.errors }}
+      </div>
+
+      <button class="btn btn-primary w-full" type="submit">登录</button>
+    </form>
+
+    <p class="helptext text-center mt-3">请使用管理员分配的独立账号登录。</p>
+  </div>
+</body>
+</html>

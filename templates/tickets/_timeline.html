@@ -1,0 +1,50 @@
+{% load ui %}
+<div class="timeline" id="timeline">
+  {% for message in timeline %}
+  <article class="timeline-item {% if message.is_note %}is-note{% elif message.is_auto_reply %}is-auto{% endif %}"
+           id="message-{{ message.pk }}">
+    <header class="timeline-head">
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="badge {% if message.is_note %}badge-pending{% elif message.direction == 'in' %}badge-open{% else %}badge-claimed{% endif %}">
+          {{ message|direction_label }}
+        </span>
+        <span class="font-medium">{{ message|sender_label }}</span>
+        {% if message.is_auto_reply %}<span class="badge badge-closed">自动回复</span>{% endif %}
+        {% if message.type == 'message' %}
+          <span class="text-muted text-xs">→ {{ message.to_addr|default:"—" }}</span>
+        {% endif %}
+      </div>
+      <div class="text-muted text-xs">{{ message.sent_at|default:message.created_at|date:"Y-m-d H:i" }}</div>
+    </header>
+    <div class="timeline-body">
+      {% if message.body_html %}
+        <div class="mail-html">{{ message.body_html|safe }}</div>
+      {% else %}
+        <div class="whitespace-pre-wrap">{{ message.body_text|default:"（无正文）" }}</div>
+      {% endif %}
+
+      {% if message.attachments.all %}
+      <div class="mt-3 border-t" style="padding-top:8px">
+        <div class="text-xs text-muted mb-1">附件 {{ message.attachments.all|length }} 个</div>
+        <ul class="list-none flex flex-wrap gap-2">
+          {% for attachment in message.attachments.all %}
+          <li class="flex items-center gap-2 border rounded px-3 py-2">
+            <span class="text-sm">{{ attachment.filename }}</span>
+            <span class="text-xs text-muted">{{ attachment.size_display }}</span>
+            {% if attachment.is_dangerous %}
+              <span class="badge badge-danger">不可预览</span>
+            {% else %}
+              <a class="btn btn-sm" href="{% url 'tickets:attachment_preview' attachment.pk %}" target="_blank" rel="noopener">预览</a>
+            {% endif %}
+            <a class="btn btn-sm" href="{% url 'tickets:attachment_download' attachment.pk %}">下载</a>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+    </div>
+  </article>
+  {% empty %}
+  <div class="card"><div class="empty">该工单还没有任何消息。</div></div>
+  {% endfor %}
+</div>

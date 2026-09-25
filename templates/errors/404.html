@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}页面不存在 · {{ site_name }}{% endblock %}
+{% block page_title %}404 · 页面不存在{% endblock %}
+{% block content %}
+<div class="card"><div class="card-body">
+  <p>你访问的页面不存在，或者对应工单不在你的可见范围内。</p>
+  <a class="btn btn-primary" href="{% url 'tickets:inbox' %}">返回收件箱</a>
+</div></div>
+{% endblock %}

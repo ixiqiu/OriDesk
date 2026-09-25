@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}{% if rule %}编辑规则{% else %}新建规则{% endif %} · {{ site_name }}{% endblock %}
+{% block page_title %}{% if rule %}编辑规则{% else %}新建规则{% endif %}{% endblock %}
+{% block page_subtitle %}
+  <div class="text-muted text-sm mt-1">
+    规则只对所选入口邮箱生效；命中动作由路由引擎在入站流程中执行（§5.2）。
+  </div>
+{% endblock %}
+{% block page_actions %}
+  <a class="btn" href="{% url 'routing:rule_list' %}">返回列表</a>
+{% endblock %}
+
+{% block content %}
+<div class="content-narrow">
+  <div class="card">
+    <form method="post">
+      {% csrf_token %}
+      <div class="card-body">
+        {% if form.non_field_errors %}
+          <ul class="errorlist">{% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}</ul>
+        {% endif %}
+
+        <div class="form-row">
+          <label for="{{ form.mailbox.id_for_label }}">{{ form.mailbox.label }}</label>
+          {{ form.mailbox }}
+          {% if form.mailbox.help_text %}<div class="help">{{ form.mailbox.help_text }}</div>{% endif %}
+          {% if form.mailbox.errors %}<ul class="errorlist">{% for error in form.mailbox.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+        </div>
+
+        <div class="flex gap-3 flex-wrap">
+          <div class="form-row" style="min-width:160px">
+            <label for="{{ form.priority.id_for_label }}">{{ form.priority.label }}</label>
+            {{ form.priority }}
+            {% if form.priority.help_text %}<div class="help">{{ form.priority.help_text }}</div>{% endif %}
+            {% if form.priority.errors %}<ul class="errorlist">{% for error in form.priority.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+          </div>
+          <div class="form-row" style="min-width:120px">
+            <label for="{{ form.enabled.id_for_label }}">{{ form.enabled.label }}</label>
+            {{ form.enabled }}
+            {% if form.enabled.errors %}<ul class="errorlist">{% for error in form.enabled.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+          </div>
+        </div>
+
+        <h3 class="mt-3">匹配条件</h3>
+        <div class="flex gap-3 flex-wrap">
+          <div class="form-row" style="min-width:180px">
+            <label for="{{ form.match_field.id_for_label }}">{{ form.match_field.label }}</label>
+            {{ form.match_field }}
+            {% if form.match_field.errors %}<ul class="errorlist">{% for error in form.match_field.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+          </div>
+          <div class="form-row" style="min-width:180px">
+            <label for="{{ form.match_op.id_for_label }}">{{ form.match_op.label }}</label>
+            {{ form.match_op }}
+            {% if form.match_op.errors %}<ul class="errorlist">{% for error in form.match_op.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+          </div>
+        </div>
+        <div class="form-row">
+          <label for="{{ form.match_value.id_for_label }}">{{ form.match_value.label }}</label>
+          {{ form.match_value }}
+          {% if form.match_value.help_text %}<div class="help">{{ form.match_value.help_text }}</div>{% endif %}
+          {% if form.match_value.errors %}<ul class="errorlist">{% for error in form.match_value.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+        </div>
+
+        <h3 class="mt-3">动作</h3>
+        <div class="form-row">
+          <label for="{{ form.action_type.id_for_label }}">{{ form.action_type.label }}</label>
+          {{ form.action_type }}
+          {% if form.action_type.errors %}<ul class="errorlist">{% for error in form.action_type.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+        </div>
+        <div class="form-row">
+          <label for="{{ form.action_group.id_for_label }}">{{ form.action_group.label }}</label>
+          {{ form.action_group }}
+          {% if form.action_group.help_text %}<div class="help">{{ form.action_group.help_text }}</div>{% endif %}
+          {% if form.action_group.errors %}<ul class="errorlist">{% for error in form.action_group.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+        </div>
+        <div class="form-row">
+          <label for="{{ form.action_value.id_for_label }}">{{ form.action_value.label }}</label>
+          {{ form.action_value }}
+          {% if form.action_value.help_text %}<div class="help">{{ form.action_value.help_text }}</div>{% endif %}
+          {% if form.action_value.errors %}<ul class="errorlist">{% for error in form.action_value.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+        </div>
+      </div>
+      <div class="card-footer flex items-center justify-between">
+        <span class="text-muted text-xs">保存后可在列表页用「规则试算」验证命中结果。</span>
+        <div class="flex gap-2">
+          <a class="btn" href="{% url 'routing:rule_list' %}">取消</a>
+          <button class="btn btn-primary" type="submit">保存规则</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

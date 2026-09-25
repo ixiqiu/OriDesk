@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="80" viewBox="0 0 240 80" role="img" aria-label="远程图片已拦截，点击加载">
+  <rect x="1" y="1" width="238" height="78" rx="8" fill="#f1f5f9" stroke="#cbd5e1" stroke-dasharray="6 4"/>
+  <circle cx="40" cy="40" r="14" fill="none" stroke="#94a3b8" stroke-width="3"/>
+  <path d="M30 52l12-14 8 9 6-6 12 15z" fill="#94a3b8"/>
+  <text x="70" y="45" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-size="13" fill="#475569">远程图片未加载（点击加载）</text>
+</svg>

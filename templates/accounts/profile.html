@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}我的账号 · {{ site_name }}{% endblock %}
+{% block page_title %}我的账号{% endblock %}
+{% block page_subtitle %}
+  <div class="text-muted text-sm mt-1">{{ profile_user.display_name }} · {{ profile_user.username }}</div>
+{% endblock %}
+{% block page_actions %}
+  <a class="btn" href="{% url 'accounts:password_change' %}">修改密码</a>
+  <form method="post" action="{% url 'accounts:logout' %}">
+    {% csrf_token %}
+    <button class="btn" type="submit">退出登录</button>
+  </form>
+{% endblock %}
+
+{% block content %}
+<div class="flex gap-4 items-start flex-wrap">
+  <div class="card" style="flex:1 1 420px; min-width:300px">
+    <div class="card-header"><h2 style="margin:0">账号信息</h2></div>
+    <div class="card-body text-sm">
+      <div class="flex justify-between py-2 border-b"><span class="text-muted">用户名</span><span>{{ profile_user.username }}</span></div>
+      <div class="flex justify-between py-2 border-b"><span class="text-muted">姓名</span><span>{{ profile_user.get_full_name|default:"—" }}</span></div>
+      <div class="flex justify-between py-2 border-b"><span class="text-muted">邮箱</span><span>{{ profile_user.email|default:"—" }}</span></div>
+      <div class="flex justify-between py-2 border-b">
+        <span class="text-muted">超级管理员</span>
+        <span>{% if profile_user.is_superadmin %}<span class="badge badge-open">是</span>{% else %}否{% endif %}</span>
+      </div>
+      <div class="flex justify-between py-2 border-b">
+        <span class="text-muted">状态</span>
+        <span>{% if profile_user.is_active %}启用{% else %}<span class="text-danger">已停用</span>{% endif %}</span>
+      </div>
+      <div class="flex justify-between py-2 border-b"><span class="text-muted">最近登录</span><span>{{ profile_user.last_login|date:"Y-m-d H:i"|default:"—" }}</span></div>
+      <div class="flex justify-between py-2"><span class="text-muted">可见工单数</span><span>{{ visible_ticket_count }}</span></div>
+    </div>
+  </div>
+
+  <div class="card" style="flex:1 1 420px; min-width:300px">
+    <div class="card-header">
+      <h2 style="margin:0">我所属的用户组</h2>
+      <span class="text-muted text-xs">共 {{ memberships|length }} 个</span>
+    </div>
+    <div class="card-body">
+      {% if memberships %}
+      <table class="table">
+        <thead>
+          <tr><th>用户组</th><th>组内身份</th><th>对外身份邮箱</th></tr>
+        </thead>
+        <tbody>
+          {% for membership in memberships %}
+          <tr>
+            <td>
+              {{ membership.group.name }}
+              {% if membership.group.is_admin_group %}<span class="badge badge-open">管理员组</span>{% endif %}
+            </td>
+            <td>
+              {% if membership.is_admin %}<span class="badge badge-claimed">组内管理员</span>{% else %}<span class="text-muted">普通成员</span>{% endif %}
+            </td>
+            <td>{{ membership.group.identity_email|default:"—（无可用邮箱）" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="empty">你还没有加入任何用户组，请联系超级管理员分配。</div>
+      {% endif %}
+    </div>
+    {% if admin_memberships %}
+    <div class="card-footer text-muted text-xs">
+      你在 {{ admin_memberships|length }} 个组内拥有管理员身份，可跨组查看工单。
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card mt-4">
+  <div class="card-header"><h2 style="margin:0">账号操作</h2></div>
+  <div class="card-body flex flex-wrap gap-2 items-center">
+    <a class="btn btn-primary" href="{% url 'accounts:password_change' %}">修改密码</a>
+    <form method="post" action="{% url 'accounts:logout' %}">
+      {% csrf_token %}
+      <button class="btn" type="submit">退出登录</button>
+    </form>
+    <span class="text-muted text-xs">退出登录使用 POST 表单提交，避免被第三方页面触发。</span>
+  </div>
+</div>
+{% endblock %}

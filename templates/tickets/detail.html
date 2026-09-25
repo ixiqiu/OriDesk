@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% load static ui %}
+{% block title %}T#{{ ticket.pk }} · {{ ticket.subject|truncatechars:40 }}{% endblock %}
+{% block page_title %}[T#{{ ticket.pk }}] {{ ticket.subject|truncatechars:60 }}{% endblock %}
+{% block page_subtitle %}
+  <div class="text-muted text-sm mt-1">
+    客户 {{ ticket.customer_email }} · 归属组 {{ ticket.group.name }} · 对外身份 {{ identity_email }} ·
+    状态 {{ ticket.get_status_display }}{% if ticket.assignee %} · 认领人 {{ ticket.assignee.display_name }}{% endif %}
+  </div>
+{% endblock %}
+{% block page_actions %}
+  {% if ticket.assignee_id == user.pk %}
+    <form method="post" action="{% url 'tickets:unclaim' ticket.pk %}">{% csrf_token %}
+      <button class="btn" type="submit">取消认领</button>
+    </form>
+  {% else %}
+    <form method="post" action="{% url 'tickets:claim' ticket.pk %}">{% csrf_token %}
+      <button class="btn btn-success" type="submit">{% if ticket.assignee_id %}改为我认领{% else %}认领工单{% endif %}</button>
+    </form>
+  {% endif %}
+  <a class="btn" href="{% url 'tickets:inbox' %}">返回列表</a>
+{% endblock %}
+
+{% block content %}
+<div class="flex gap-4 items-start flex-wrap">
+  <div style="flex:1 1 620px; min-width:320px">
+    {% include "tickets/_timeline.html" %}
+
+    <div class="card mt-4">
+      <div class="card-header"><h2 style="margin:0">回复客户</h2>
+        <span class="text-muted text-xs">将以「{{ identity_email }}」的组身份发出</span>
+      </div>
+      <form method="post" action="{% url 'tickets:reply' ticket.pk %}" enctype="multipart/form-data" id="reply-form">
+        {% csrf_token %}
+        <div class="card-body">
+          <div id="reply-editor" class="editor-wrap"></div>
+          {{ reply_form.body_html }}
+          <div class="mt-2">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="toggle-plain"> 切换到纯文本模式
+            </label>
+            <div id="plain-wrap" class="hidden mt-2">{{ reply_form.body_text }}</div>
+          </div>
+          <div class="form-row mt-3">
+            <label for="{{ reply_form.cc.id_for_label }}">抄送（可选）</label>
+            {{ reply_form.cc }}
+          </div>
+          <div class="form-row">
+            <label for="{{ reply_form.attachments.id_for_label }}">附件（最多 10 个，单个不超过系统上限）</label>
+            {{ reply_form.attachments }}
+          </div>
+        </div>
+        <div class="card-footer flex items-center justify-between">
+          <span class="text-muted text-xs">发送后该工单的「待回复」标签会自动消失。</span>
+          <button class="btn btn-primary" type="submit">发送回复</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card mt-4">
+      <div class="card-header"><h2 style="margin:0">内部备注</h2>
+        <span class="text-muted text-xs">组内可见，不会发给客户</span>
+      </div>
+      <form method="post" action="{% url 'tickets:note' ticket.pk %}">
+        {% csrf_token %}
+        <div class="card-body">{{ note_form.body_text }}</div>
+        <div class="card-footer text-right"><button class="btn" type="submit">添加备注</button></div>
+      </form>
+    </div>
+  </div>
+
+  <aside style="flex:0 1 320px; min-width:280px">
+    <div class="card">
+      <div class="card-header"><h2 style="margin:0">工单操作</h2></div>
+      <div class="card-body">
+        <div class="form-row">
+          <label>状态</label>
+          <form method="post" action="{% url 'tickets:set_status' ticket.pk %}" class="flex gap-2">
+            {% csrf_token %}
+            {{ status_form.status }}
+            <button class="btn btn-sm" type="submit">更新</button>
+          </form>
+        </div>
+        {% if can_reassign %}
+        <div class="form-row">
+          <label>改派到其他组</label>
+          <form method="post" action="{% url 'tickets:reassign' ticket.pk %}">
+            {% csrf_token %}
+            {{ reassign_form.group }}
+            <input type="text" name="reason" placeholder="改派原因（可选）" class="mt-2">
+            <button class="btn btn-sm mt-2" type="submit">确认改派</button>
+          </form>
+          <div class="help">改派后原组默认失去可见性，操作会写入审计。</div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card mt-4">
+      <div class="card-header"><h2 style="margin:0">客户与工单信息</h2></div>
+      <div class="card-body text-sm">
+        <div class="flex justify-between py-2 border-b"><span class="text-muted">客户邮箱</span><span>{{ ticket.customer_email }}</span></div>
+        <div class="flex justify-between py-2 border-b"><span class="text-muted">入口邮箱</span><span>{{ ticket.mailbox.email }}</span></div>
+        <div class="flex justify-between py-2 border-b"><span class="text-muted">归一化主题</span><span>{{ ticket.normalized_subject|default:"—" }}</span></div>
+        <div class="flex justify-between py-2 border-b"><span class="text-muted">创建时间</span><span>{{ ticket.created_at|date:"Y-m-d H:i" }}</span></div>
+        <div class="flex justify-between py-2 border-b"><span class="text-muted">最后消息</span><span>{{ ticket.last_message_at|date:"Y-m-d H:i" }}</span></div>
+        <div class="flex justify-between py-2"><span class="text-muted">待回复</span><span>{{ ticket.is_awaiting_reply|yesno:"是,否" }}</span></div>
+      </div>
+    </div>
+
+    <div class="card mt-4">
+      <div class="card-header"><h2 style="margin:0">操作记录</h2></div>
+      <div class="card-body">
+        <ul class="list-none text-sm">
+          {% for log in audit_logs %}
+          <li class="py-2 border-b">
+            <div class="flex justify-between gap-2">
+              <span>{{ log.get_action_display }}</span>
+              <span class="text-muted text-xs">{{ log.created_at|date:"m-d H:i" }}</span>
+            </div>
+            <div class="text-muted text-xs">
+              {{ log.user.display_name|default:"系统" }}
+              {% if log.group %}· {{ log.group.name }}{% endif %}
+              {% if log.detail.from_group %}· {{ log.detail.from_group }} → {{ log.detail.to_group }}{% endif %}
+              {% if log.detail.event %}· {{ log.detail.event }}{% endif %}
+            </div>
+          </li>
+          {% empty %}
+          <li class="text-muted">暂无记录。</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </aside>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'vendor/quill.js' %}"></script>
+<script src="{% static 'js/editor.js' %}"></script>
+{% endblock %}
