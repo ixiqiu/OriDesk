@@ -6,8 +6,7 @@ on:
   pull_request:
 
 env:
-  DJANGO_SECRET_KEY: ci-only-secret-key-not-used-in-production-0123456789
-  FERNET_KEY: F9Li98xxl1T17SjxC4--SWaSr3YMaG_zcu03OFmYVCE=
+  # 只放非敏感配置；SECRET_KEY / FERNET_KEY 在每个作业里现场生成，避免任何密钥进版本库
   DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,testserver
 
 jobs:
@@ -24,11 +23,17 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
+      - name: 生成测试密钥
+        run: |
+          echo "DJANGO_SECRET_KEY=$(openssl rand -base64 48 | tr -d '\n')" >> "$GITHUB_ENV"
+          echo "FERNET_KEY=$(python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')" >> "$GITHUB_ENV"
       - name: Django 自检
         run: |
           python manage.py check
           python manage.py makemigrations --check --dry-run
       - name: 安全配置自检
+        env:
+          DJANGO_SECURE_SSL_REDIRECT: "True"
         run: python manage.py check --deploy
       - name: 运行测试
         run: python -m pytest -q --cov=apps --cov-report=term-missing
@@ -62,6 +67,10 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -r requirements-dev.txt
+      - name: 生成测试密钥
+        run: |
+          echo "DJANGO_SECRET_KEY=$(openssl rand -base64 48 | tr -d '\n')" >> "$GITHUB_ENV"
+          echo "FERNET_KEY=$(python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')" >> "$GITHUB_ENV"
       - name: 迁移与测试（MariaDB）
         run: |
           python manage.py migrate
