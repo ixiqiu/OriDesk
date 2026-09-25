@@ -1,0 +1,17 @@
+# 代码风格与静态检查（仅开发期使用，见 requirements-dev.txt）
+target-version = "py312"
+line-length = 110
+exclude = [".venv", ".toolchain", "migrations", "staticfiles", "media"]
+
+[lint]
+# E4/E7/E9：语法与导入错误；F：pyflakes；W：警告；I：import 排序
+select = ["E4", "E7", "E9", "F", "W", "I", "B"]
+ignore = [
+  "E501",   # 行长度由 formatter 处理，中文注释不做硬性限制
+  "B008",   # Django/DRF 习惯在默认参数里调用函数（forms.FileField 等）
+]
+
+[lint.per-file-ignores]
+"**/settings.py" = ["F403", "F405"]
+"**/tests/**" = ["B011", "B017"]
+"tests/**" = ["B011", "B017"]

@@ -1,0 +1,12 @@
+# 运行时依赖（技术栈见开发文档 §8，均为文档已确认选型）
+Django>=5.0,<5.3
+django-rq>=2.10          # RQ worker 的 manage.py 命令（文档 §9.1）
+rq>=1.16                 # 队列
+redis>=5.0               # RQ broker / 缓存
+APScheduler>=3.10        # IMAP 轮询定时任务（文档 §8）
+imapclient>=3.0          # IMAP 增量同步（文档 §6.4）
+bleach>=6.1              # HTML 净化（文档 §6.2）
+cryptography>=42.0       # Fernet 凭据加密（文档 §4.2）
+argon2-cffi>=23.1        # Argon2 密码哈希（文档 §8）
+PyMySQL>=1.1             # MariaDB 驱动（文档 §8.1：mysqlclient 或 PyMySQL）
+gunicorn>=21.2           # WSGI 服务（文档 §9.1）

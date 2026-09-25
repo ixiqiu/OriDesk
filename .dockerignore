@@ -1,0 +1,68 @@
+# ===========================================================================
+# 构建上下文过滤（Docker build context）
+#
+# 两个目的：
+#   1) 缩减上下文体积、加快构建（.venv / .toolchain / 附件库动辄数百 MB）；
+#   2) 防止机密与本地数据进入镜像层——尤其是 .env（含 SECRET_KEY / FERNET_KEY）。
+#
+# 必须保留在上下文里的内容：apps/、config/、templates/、static/、locale/（若有）、
+# manage.py、requirements.txt、docker/entrypoint.sh、pytest.ini。
+# ===========================================================================
+
+# ---- 版本控制与本地虚拟环境 / 工具链 ----
+.git
+.gitignore
+.gitattributes
+.toolchain/
+.venv/
+venv/
+env/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+
+# ---- 测试与静态检查产物 ----
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.ruff_cache/
+.mypy_cache/
+.tox/
+.nox/
+
+# ---- 机密与本地配置：绝不进镜像（开发文档 §9.3 / §10.3）----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+
+# ---- 本地数据库与运行时产物（容器内改用绑定挂载）----
+db.sqlite3
+*.sqlite3
+*.sqlite3-journal
+*.sqlite3-wal
+*.sqlite3-shm
+media/
+staticfiles/
+*.log
+logs/
+
+# ---- 备份产物（应放在项目目录之外；万一放在项目内也不要进镜像）----
+backups/
+scripts/backups/
+
+# ---- 镜像内不需要的部署描述与文档 ----
+docs/
+deploy/
+README.md
+docker-compose.yml
+docker-compose.*.yml
+Dockerfile
+.dockerignore
+Makefile
