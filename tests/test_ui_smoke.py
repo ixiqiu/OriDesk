@@ -10,6 +10,7 @@ from django.urls import reverse
 
 from apps.audit.models import AuditLog
 from apps.routing.models import Rule, Template
+from apps.tickets.models import Tag
 from tests.conftest import make_message, make_ticket
 
 CUSTOMER = "customer@customer-domain.com"
@@ -37,7 +38,8 @@ def prepared(unified_mailbox, tech_group, tech_mailbox, finance_group, fallback_
     Template.objects.create(scope="global", body="全局模板 {{ ticket_id }}")
     Template.objects.create(scope="group", group=tech_group, body="组模板 {{ ticket_id }}")
     AuditLog.objects.create(action="login", user=superadmin, detail={"username": "superadmin"})
-    return {"ticket": ticket, "group": tech_group}
+    tag = Tag.objects.create(name="紧急", color="red")
+    return {"ticket": ticket, "group": tech_group, "tag": tag}
 
 
 PAGES = [
@@ -60,6 +62,9 @@ PAGES = [
     ("accounts:mailbox_list", None),
     ("accounts:mailbox_create", None),
     ("accounts:password_change", None),
+    ("tickets:tag_list", None),
+    ("routing:tag_admin_list", None),
+    ("routing:tag_admin_create", None),
 ]
 
 
@@ -78,6 +83,7 @@ def test_dynamic_pages_render(client, superadmin, prepared):
 
     targets = [
         ("tickets:detail", [ticket.pk]),
+        ("routing:tag_admin_edit", [prepared["tag"].pk]),
         ("tickets:message_list", [ticket.pk]),
         ("routing:rule_edit", [Rule.objects.first().pk]),
         ("autoresponder:group_template_edit", [group.pk]),

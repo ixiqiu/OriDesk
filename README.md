@@ -18,6 +18,7 @@
 | 2 | 邮件接入 | IMAP 增量拉取，按 `UIDVALIDITY` 变更重置同步位点，`last_uid` 只推进到连续成功处理的最后一封 | `apps/mailboxes/sync.py` |
 | 3 | 防循环过滤 | `Auto-Submitted`、`X-Auto-Response-Suppress`、`Precedence: bulk`、`List-Id`、来自本系统邮箱、`no-reply@`/`mailer-daemon@` | `apps/mailboxes/filters.py` |
 | 4 | HTML 净化 | bleach 白名单标签/属性，远程图片默认不加载 | `apps/mailboxes/sanitizer.py` |
+| 4b | 工单标签 | 标签字典（全局/组作用域，作用域内同名唯一）+ 工单↔标签关联（记录来源与操作人）；规则命中 `add_tag` 时自动打标；收件箱可按标签筛选 | `apps/tickets/models.py`（`Tag`/`TicketTag`）、`apps/tickets/services.py` |
 | 5 | 附件处理 | 落盘 `media/attachments/{ticket_id}/{message_key}/{filename}`，危险扩展名仅可下载 | `apps/mailboxes/storage.py`、`apps/tickets/models.py` |
 | 6 | 工单归并 | `References`/`In-Reply-To` 优先，其次主题 `[T#123]`；两者都必须校验发件人与工单 `customer_email` 一致 | `apps/tickets/services.py::find_ticket` |
 | 7 | 幂等保护 | 同一入口邮箱的同一 `Message-ID` 只处理一次（防 IMAP 重投、UIDVALIDITY 重扫导致的重复工单） | `apps/mailboxes/pipeline.py::already_seen` |
@@ -331,6 +332,8 @@ docker compose exec web sh -c 'DB_USER=root DB_PASSWORD="$DB_ROOT_PASSWORD" DB_N
 - `.env` 已在 `.gitignore`（`.env`、`.env.*`）与 `.dockerignore` 中排除，**任何情况下不要提交或打进镜像**。
 - `DJANGO_SECRET_KEY` / `FERNET_KEY` / `DB_PASSWORD` 只从环境变量注入；容器入口会拒绝以 `.env.example` 示例值启动（`SKIP_ENV_CHECK=1` 仅用于本地调试）。
 - `DEBUG=False` 时自动开启：HSTS、`SESSION_COOKIE_SECURE`、`CSRF_COOKIE_SECURE`、`SECURE_CONTENT_TYPE_NOSNIFF`、`X_FRAME_OPTIONS=DENY`、`SECURE_REFERRER_POLICY=same-origin`。
+> **v1.2 变更**：经人工确认（开发文档 §10.4）新增 `Tag` / `TicketTag` 模型，把 §4.4 的 `add_tag` 规则动作真正落库（此前只写审计留痕）。迁移：`tickets/0002_*`。
+
 - 邮箱授权码以 Fernet 密文存于 `mailboxes.secret_encrypted`，日志中只出现掩码（`apps/core/crypto.py::mask_secret`）。
 - 附件路径经过 `safe_component()` 归一化，杜绝目录穿越；危险扩展名仅允许下载。
 - **附件鉴权下载（已默认启用）**：浏览器只能通过 `/attachments/<id>/download|preview/` 取附件，视图校验登录 + 工单可见性，

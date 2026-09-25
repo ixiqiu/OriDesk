@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}标签管理 · {{ site_name }}{% endblock %}
+{% block page_title %}标签管理{% endblock %}
+{% block page_subtitle %}
+  <div class="text-muted text-sm mt-1">
+    维护全局标签与各用户组专属标签；同一作用域内标签名不可重复（不区分大小写）。
+  </div>
+{% endblock %}
+{% block page_actions %}
+  <a class="btn btn-primary" href="{% url 'routing:tag_admin_create' %}">新建标签</a>
+  <a class="btn" href="{% url 'tickets:tag_list' %}">标签总览</a>
+  <a class="btn" href="{% url 'routing:rule_list' %}">返回规则</a>
+{% endblock %}
+
+{% block content %}
+<div class="alert alert-warning mb-4">
+  <strong>删除标签会级联移除所有工单上的该标签关联</strong>，且不可恢复。
+  如果只是想让标签不再被使用，请优先使用「停用」——停用后不能再打标签，但已打的标签会保留。
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h2 style="margin:0">标签列表</h2>
+    <span class="text-muted text-xs">含已停用标签 · 共 {{ page_obj.paginator.count }} 个</span>
+  </div>
+  <div class="overflow-auto">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>名称</th>
+          <th style="width:180px">作用域</th>
+          <th style="width:120px">颜色</th>
+          <th style="width:100px">是否启用</th>
+          <th style="width:110px">关联工单数</th>
+          <th style="width:160px">创建时间</th>
+          <th style="width:230px">操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for tag in tags %}
+        <tr>
+          <td>
+            <span class="tag-badge tag-{{ tag.color }}">{{ tag.name }}</span>
+            {% if tag.description %}<div class="text-muted text-xs mt-1">{{ tag.description }}</div>{% endif %}
+          </td>
+          <td class="text-sm">{{ tag.scope_label }}</td>
+          <td class="text-sm">{{ tag.get_color_display }}</td>
+          <td>
+            {% if tag.is_active %}<span class="badge badge-claimed">已启用</span>
+            {% else %}<span class="badge badge-closed">已停用</span>{% endif %}
+          </td>
+          <td class="text-sm">{{ tag.usage_count }}</td>
+          <td class="text-muted text-xs">{{ tag.created_at|date:"Y-m-d H:i" }}</td>
+          <td>
+            <div class="flex gap-2">
+              <a class="btn btn-sm" href="{% url 'routing:tag_admin_edit' tag.pk %}">编辑</a>
+              <form method="post" action="{% url 'routing:tag_admin_toggle' tag.pk %}">{% csrf_token %}
+                <button class="btn btn-sm" type="submit">{% if tag.is_active %}停用{% else %}启用{% endif %}</button>
+              </form>
+              <form method="post" action="{% url 'routing:tag_admin_delete' tag.pk %}"
+                    onsubmit="return confirm('确定删除标签「{{ tag.name|escapejs }}」？将级联删除所有工单上的该标签（当前 {{ tag.usage_count }} 个关联），且不可恢复。建议优先使用「停用」。');">
+                {% csrf_token %}
+                <button class="btn btn-sm btn-danger" type="submit">删除</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="empty">还没有任何标签，点击右上角「新建标签」创建。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% include "partials/_pagination.html" %}
+{% endblock %}

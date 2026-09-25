@@ -18,7 +18,7 @@ from apps.accounts.models import Group, Mailbox, User
 from apps.audit.models import Setting
 from apps.core.utils import extract_email
 from apps.routing.models import Rule
-from apps.tickets.models import Ticket
+from apps.tickets.models import Tag, Ticket
 
 # ---------------------------------------------------------------------- 规则
 
@@ -258,3 +258,42 @@ class SystemSettingsForm(forms.Form):
             Setting.set(key, obj.pk if obj else "", user=user)
             written.append(key)
         return written
+
+
+# ---------------------------------------------------------------------- 标签字典（v1.2）
+
+
+class TagForm(forms.ModelForm):
+    """标签字典的新建 / 编辑（仅管理员可用，由视图的 @routing_manager_required 保证）。
+
+    「组作用域内同名唯一」**不在本表单里重写**：ModelForm 的 `_post_clean()` 会用表单数据
+    构造 Tag 实例并调用 `full_clean()`，进而触发 `Tag.clean()` 的唯一性校验，
+    `ValidationError({"name": ...})` 会被自动转成表单字段错误（§10.1 模型先行）。
+    """
+
+    class Meta:
+        model = Tag
+        fields = ["name", "group", "color", "description", "is_active"]
+        labels = {
+            "name": "标签名",
+            "group": "作用域",
+            "color": "角标颜色",
+            "description": "说明",
+            "is_active": "启用",
+        }
+        help_texts = {
+            "name": "同一作用域内不能重名（不区分大小写）；首尾空白会被自动去掉。",
+            "group": "留空 = 全局标签（所有组可用）；选择用户组 = 该组专属标签。",
+            "color": "仅影响界面角标配色，不影响业务逻辑。",
+            "description": "可选，鼠标悬停角标时显示。",
+            "is_active": "停用后不能再被打到工单上，但已打的标签会保留。",
+        }
+        widgets = {
+            "name": forms.TextInput(attrs={"placeholder": "例如：紧急", "autocomplete": "off"}),
+            "description": forms.TextInput(attrs={"placeholder": "可选"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["group"].queryset = Group.objects.all().order_by("name")
+        self.fields["group"].empty_label = "— 全局标签（所有组可用）—"

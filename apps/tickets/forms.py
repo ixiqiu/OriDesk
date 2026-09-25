@@ -11,7 +11,8 @@ from django import forms
 
 from apps.accounts.models import Group, User
 from apps.mailboxes.storage import max_attachment_bytes
-from apps.tickets.models import Ticket
+from apps.tickets.models import Tag, Ticket
+from apps.tickets.services import tags_available_for
 
 MAX_ATTACHMENT_COUNT = 10
 
@@ -109,6 +110,54 @@ class AssignForm(forms.Form):
             self.fields["assignee"].queryset = User.objects.filter(
                 user_groups__group=ticket.group
             ).distinct().order_by("username")
+
+
+class TicketTagForm(forms.Form):
+    """给工单打标签：下拉选现有标签，或输入新标签名（二选一，优先取下拉）。
+
+    下拉选项来自 `tags_available_for(ticket.group)`（全局标签 + 该组专属标签），
+    因此用户不能通过伪造 POST 给工单打上别的组的标签。
+    """
+
+    tag = forms.ModelChoiceField(
+        queryset=Tag.objects.none(),
+        required=False,
+        label="选择已有标签",
+        empty_label="— 选择现有标签 —",
+    )
+    new_tag = forms.CharField(
+        required=False,
+        max_length=50,
+        strip=False,  # 保留用户原始输入，纯空白才能报"标签名不能为空"
+        label="或输入新标签名",
+        widget=forms.TextInput(attrs={"placeholder": "例如：紧急", "autocomplete": "off"}),
+    )
+
+    def __init__(self, *args, ticket: Ticket | None = None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.ticket = ticket
+        group = ticket.group if ticket is not None else None
+        self.fields["tag"].queryset = tags_available_for(group)
+
+    def clean(self):
+        cleaned = super().clean()
+        tag = cleaned.get("tag")
+        raw = cleaned.get("new_tag") or ""
+        # 归一化与模型保持一致（去首尾空白、压缩内部空白）。
+        normalized = Tag.normalize_name(raw)
+        if tag is None and not normalized:
+            if raw:
+                # 用户确实在文本框里输入了内容，但只有空白字符
+                raise forms.ValidationError("标签名不能为空。")
+            raise forms.ValidationError("请选择已有标签，或输入一个新标签名。")
+        cleaned["new_tag"] = normalized
+        return cleaned
+
+    def selected(self):
+        """返回 Tag 实例（下拉）或归一化后的标签名（新建），供 add_tag 使用。"""
+        if not self.is_valid():
+            raise ValueError("表单未通过校验。")
+        return self.cleaned_data["tag"] or self.cleaned_data["new_tag"]
 
 
 class InboxFilterForm(forms.Form):

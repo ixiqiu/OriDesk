@@ -22,6 +22,9 @@ urlpatterns = [
     path("tickets/<int:pk>/reassign/", views.reassign, name="reassign"),
     path("tickets/<int:pk>/status/", views.update_status, name="set_status"),
     path("tickets/<int:pk>/messages/", views.message_list, name="message_list"),
+    path("tickets/<int:pk>/tags/add/", views.add_ticket_tag, name="tag_add"),
+    path("tickets/<int:pk>/tags/<int:tag_id>/remove/", views.remove_ticket_tag, name="tag_remove"),
+    path("tags/", views.tag_list, name="tag_list"),
     path("attachments/<int:pk>/download/", views.attachment_download, name="attachment_download"),
     path("attachments/<int:pk>/preview/", views.attachment_preview, name="attachment_preview"),
 ]

@@ -14,4 +14,9 @@ urlpatterns = [
     path("rules/<int:pk>/toggle/", views.rule_toggle, name="rule_toggle"),
     path("settings/", views.settings_edit, name="settings"),
     path("mailboxes/", views.mailbox_overview, name="mailbox_overview"),
+    path("tags/", views.tag_admin_list, name="tag_admin_list"),
+    path("tags/new/", views.tag_admin_edit, name="tag_admin_create"),
+    path("tags/<int:pk>/edit/", views.tag_admin_edit, name="tag_admin_edit"),
+    path("tags/<int:pk>/delete/", views.tag_admin_delete, name="tag_admin_delete"),
+    path("tags/<int:pk>/toggle/", views.tag_admin_toggle, name="tag_admin_toggle"),
 ]

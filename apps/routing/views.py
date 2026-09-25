@@ -22,7 +22,7 @@ from apps.accounts.models import Group, Mailbox
 from apps.audit.models import Setting
 from apps.core.permissions import routing_manager_required
 from apps.mailboxes.tasks import dispatch, sync_mailbox_task
-from apps.routing.forms import RuleForm, RuleTrialForm, SystemSettingsForm
+from apps.routing.forms import RuleForm, RuleTrialForm, SystemSettingsForm, TagForm
 from apps.routing.models import Rule
 from apps.routing.services import (
     RoutingError,
@@ -33,6 +33,7 @@ from apps.routing.services import (
     route_ticket,
     sticky_window_days,
 )
+from apps.tickets.models import Tag
 
 logger = logging.getLogger(__name__)
 
@@ -262,3 +263,65 @@ def _sync_mailbox(request):
             f"失败 {stats.get('failed', 0)} 封。",
         )
     return redirect("routing:mailbox_overview")
+
+
+# ------------------------------------------------------------------ 标签字典管理（v1.2）
+@routing_manager_required
+def tag_admin_list(request):
+    """标签字典总览：含停用标签，展示作用域 / 颜色 / 关联工单数。"""
+    queryset = (
+        Tag.objects.select_related("group")
+        .annotate(usage_count=Count("ticket_tags", distinct=True))
+        .order_by("group_id", "name", "id")
+    )
+    paginator = Paginator(queryset, PAGE_SIZE)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    return render(
+        request,
+        "routing/tag_list.html",
+        {"page_obj": page_obj, "tags": page_obj.object_list},
+    )
+
+
+@routing_manager_required
+def tag_admin_edit(request, pk: int | None = None):
+    """标签新建（无 pk）/ 编辑（有 pk）。同名同作用域由 Tag.clean() 校验后转表单错误。"""
+    tag = get_object_or_404(Tag.objects.select_related("group"), pk=pk) if pk is not None else None
+    editing = tag is not None
+
+    if request.method == "POST":
+        form = TagForm(request.POST, instance=tag)
+        if form.is_valid():
+            tag = form.save()
+            messages.success(
+                request,
+                f"标签「{tag.name}」（{tag.scope_label}）已{'保存' if editing else '创建'}。",
+            )
+            return redirect("routing:tag_admin_list")
+    else:
+        form = TagForm(instance=tag)
+
+    return render(request, "routing/tag_form.html", {"form": form, "tag": tag, "editing": editing})
+
+
+@routing_manager_required
+@require_POST
+def tag_admin_delete(request, pk: int):
+    """删除标签。会级联删除所有工单上的关联，页面已二次确认并明确提示。"""
+    tag = get_object_or_404(Tag, pk=pk)
+    label = str(tag)
+    linked = tag.ticket_tags.count()
+    tag.delete()
+    messages.success(request, f"标签已删除：{label}（同时解除了 {linked} 个工单关联）。")
+    return redirect("routing:tag_admin_list")
+
+
+@routing_manager_required
+@require_POST
+def tag_admin_toggle(request, pk: int):
+    """停用 / 启用标签（推荐用停用代替删除，保留历史关联）。"""
+    tag = get_object_or_404(Tag, pk=pk)
+    tag.is_active = not tag.is_active
+    tag.save(update_fields=["is_active"])
+    messages.success(request, f"标签「{tag.name}」已{'启用' if tag.is_active else '停用'}。")
+    return redirect("routing:tag_admin_list")

@@ -16,9 +16,9 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.http import FileResponse, Http404, HttpResponse
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.http import content_disposition_header
 from django.views.decorators.http import require_POST
@@ -30,12 +30,21 @@ from apps.mailboxes import storage
 from apps.mailboxes.sanitizer import sanitize_html
 from apps.mailboxes.services import MailDeliveryError, identity_mailbox_for, send_reply
 from apps.routing.services import reassign_ticket
-from apps.tickets.forms import InboxFilterForm, NoteForm, ReassignForm, ReplyForm, StatusForm
-from apps.tickets.models import Attachment, Ticket
+from apps.tickets.forms import (
+    InboxFilterForm,
+    NoteForm,
+    ReassignForm,
+    ReplyForm,
+    StatusForm,
+    TicketTagForm,
+)
+from apps.tickets.models import MAX_TAGS_PER_TICKET, Attachment, Tag, Ticket
 from apps.tickets.selectors import visible_tickets
 from apps.tickets.services import (
     add_note,
+    add_tag,
     claim_ticket,
+    remove_tag,
     set_status,
     unclaim_ticket,
 )
@@ -50,6 +59,8 @@ PAGE_SIZE = 25
 def inbox(request, scope: str = "all"):
     """统一收件箱 / 组收件箱（§7-6）。"""
     queryset = visible_tickets(request.user).select_related("group", "assignee", "mailbox")
+    # 列表行要展示标签角标：预取关联与标签（含组名，用于标注"历史标签"），避免 N+1。
+    queryset = queryset.prefetch_related("ticket_tags__tag__group")
 
     if scope == "mine":
         queryset = queryset.filter(assignee=request.user)
@@ -61,7 +72,7 @@ def inbox(request, scope: str = "all"):
         )
 
     form = InboxFilterForm(request.GET or None)
-    filters = {"q": "", "group": "", "status": "", "awaiting": "", "assignee": ""}
+    filters = {"q": "", "group": "", "status": "", "awaiting": "", "assignee": "", "tag": ""}
     if form.is_valid():
         data = form.cleaned_data
         filters = {
@@ -70,6 +81,7 @@ def inbox(request, scope: str = "all"):
             "status": data.get("status") or "",
             "awaiting": data.get("awaiting") or "",
             "assignee": data.get("assignee") or "",
+            "tag": request.GET.get("tag", ""),
         }
     else:
         # 手工解析 group / status 等，兼容直接点导航链接
@@ -80,6 +92,7 @@ def inbox(request, scope: str = "all"):
                 "status": request.GET.get("status", ""),
                 "awaiting": request.GET.get("awaiting", ""),
                 "assignee": request.GET.get("assignee", ""),
+                "tag": request.GET.get("tag", ""),
             }
         )
 
@@ -109,6 +122,13 @@ def inbox(request, scope: str = "all"):
             queryset = queryset.filter(assignee_id=int(filters["assignee"]))
         elif filters["assignee"] == "none":
             queryset = queryset.filter(assignee__isnull=True)
+    if filters["tag"]:
+        # 非法主键（如 ?tag=abc）直接忽略该筛选，绝不因为一个坏参数返回 500；
+        # 过滤始终建立在 visible_tickets 之上，跨组标签不会泄露他人工单。
+        try:
+            queryset = queryset.filter(ticket_tags__tag_id=int(filters["tag"]))
+        except (TypeError, ValueError):
+            logger.info("收件箱收到非法的 tag 参数：%r，已忽略。", filters["tag"])
 
     queryset = queryset.order_by("-last_message_at", "-id")
     paginator = Paginator(queryset, PAGE_SIZE)
@@ -121,9 +141,23 @@ def inbox(request, scope: str = "all"):
         "filters": filters,
         "form": form,
         "groups": _selectable_groups(request.user),
+        "tag_options": _tag_filter_options(request.user),
     }
     template = "tickets/_inbox_table.html" if _is_htmx(request) else "tickets/inbox.html"
     return render(request, template, context)
+
+
+def _tag_filter_options(user):
+    """收件箱「标签」筛选下拉：全局标签 + 当前用户可见组的标签（去重、仅启用）。
+
+    等价于对用户可见的每个组调用 `tags_available_for(group)` 后取并集。
+    跨组管理员（sees_all_tickets）可看到全部标签。
+    """
+    queryset = Tag.objects.filter(is_active=True)
+    if not getattr(user, "sees_all_tickets", False):
+        group_ids = user.user_groups.values_list("group_id", flat=True)
+        queryset = queryset.filter(Q(group__isnull=True) | Q(group_id__in=group_ids))
+    return queryset.select_related("group").distinct().order_by("name", "id")
 
 
 def _selectable_groups(user):
@@ -155,6 +189,11 @@ def _detail_context(request, ticket: Ticket) -> dict:
         "identity_email": _identity_email_safe(ticket),
         "can_reassign": True,
         "editor_id": "reply-editor",
+        "ticket_tags": ticket.ticket_tags.select_related("tag", "tag__group").order_by(
+            "tag__name", "id"
+        ),
+        "tag_form": TicketTagForm(ticket=ticket),
+        "max_tags": MAX_TAGS_PER_TICKET,
     }
 
 
@@ -384,3 +423,78 @@ def _visible_attachment(user, pk: int) -> Attachment:
 
 def _is_htmx(request) -> bool:
     return request.headers.get("HX-Request") == "true"
+
+
+# ------------------------------------------------------------------ 标签（v1.2 界面层）
+@login_required
+@require_POST
+def add_ticket_tag(request, pk: int):
+    """给工单打标签（下拉选现有标签，或输入新标签名）。写操作：POST + CSRF + PRG。"""
+    ticket = get_visible_ticket(request.user, pk)
+    form = TicketTagForm(request.POST, ticket=ticket)
+
+    if not form.is_valid():
+        messages.error(request, _tag_form_error(form))
+        return _back_after_tag_change(request, ticket)
+
+    try:
+        link, created = add_tag(ticket, form.selected(), user=request.user, source="manual")
+    except ValueError as exc:
+        # 停用标签 / 跨组标签 / 超过单工单上限：服务层给出的中文提示直接展示，绝不 500。
+        messages.error(request, str(exc))
+    else:
+        if created:
+            messages.success(request, f"已添加标签「{link.tag.name}」。")
+        else:
+            messages.info(request, f"工单已有标签「{link.tag.name}」，未重复添加。")
+    return _back_after_tag_change(request, ticket)
+
+
+@login_required
+@require_POST
+def remove_ticket_tag(request, pk: int, tag_id: int):
+    """移除工单标签（历史标签/已停用标签同样允许移除）。"""
+    ticket = get_visible_ticket(request.user, pk)
+    tag = get_object_or_404(Tag, pk=tag_id)
+    try:
+        removed = remove_tag(ticket, tag, user=request.user)
+    except ValueError as exc:  # 服务层防御性抛错，同样转成提示
+        messages.error(request, str(exc))
+    else:
+        if removed:
+            messages.success(request, f"已移除标签「{tag.name}」。")
+        else:
+            messages.info(request, f"工单上没有标签「{tag.name}」。")
+    return _back_after_tag_change(request, ticket)
+
+
+@login_required
+def tag_list(request):
+    """标签总览（登录即可访问）：全局标签与各组标签、使用次数、创建时间。"""
+    queryset = (
+        Tag.objects.select_related("group")
+        .annotate(usage_count=Count("ticket_tags", distinct=True))
+        .order_by("group_id", "name", "id")
+    )
+    paginator = Paginator(queryset, PAGE_SIZE)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    return render(
+        request,
+        "tickets/tag_list.html",
+        {"page_obj": page_obj, "tags": page_obj.object_list},
+    )
+
+
+def _tag_form_error(form) -> str:
+    """把表单错误压成一条面向用户的中文提示。"""
+    for errors in form.errors.values():
+        for error in errors:
+            return str(error)
+    return "标签无效，请选择已有标签或输入新的标签名。"
+
+
+def _back_after_tag_change(request, ticket: Ticket):
+    """标签增删后的返回：HTMX 请求返回时间线局部（与 reply/note 一致），否则 PRG 重定向。"""
+    if _is_htmx(request):
+        return message_list(request, ticket.pk)
+    return redirect("tickets:detail", pk=ticket.pk)

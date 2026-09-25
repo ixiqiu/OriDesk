@@ -120,8 +120,8 @@ def apply_rule_actions(ticket: Ticket, msg, mailbox, user=None) -> list[str]:
 
     - set_status：直接改工单状态
     - assign_user：把工单认领给指定用户（仅当其属于该工单的组或拥有跨组权限时）
-    - add_tag：v1.1 数据模型没有标签字段，按"可追溯"原则写入审计 detail
-      （真正实现多标签需要人工确认新增模型，见文档 §10.4）
+    - add_tag：按当前工单所属组解析/新建标签并写入 TicketTag（幂等），
+      同时记录在审计里（§10.4 已获人工确认后新增 Tag/TicketTag 模型）
     """
     rule = match_rule(msg, mailbox) if mailbox is not None else None
     if rule is None:
@@ -147,7 +147,21 @@ def apply_rule_actions(ticket: Ticket, msg, mailbox, user=None) -> list[str]:
             logger.warning("规则 id=%s 的 assign_user 未找到用户：%s", rule.pk, rule.action_value)
 
     elif rule.action_type == "add_tag":
-        applied.append(f"tag={rule.action_value}")
+        # 标签落库（v1.2 经人工确认新增 Tag/TicketTag 模型）；
+        # 审计由本函数末尾统一写一条 rule_action，故这里 record_audit=False。
+        from apps.tickets.services import add_tag
+
+        name = (rule.action_value or "").strip()
+        if not name:
+            logger.warning("规则 id=%s 的 add_tag 未配置标签名，已跳过。", rule.pk)
+        else:
+            try:
+                _, created = add_tag(
+                    ticket, name, user=user, source="rule", record_audit=False
+                )
+                applied.append(f"tag={name}" + ("" if created else "(已存在)"))
+            except ValueError:
+                logger.warning("规则 id=%s 的 add_tag 标签名非法：%r", rule.pk, name)
 
     if applied:
         audit(

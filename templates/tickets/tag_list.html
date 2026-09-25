@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% load ui %}
+{% block title %}标签总览 · {{ site_name }}{% endblock %}
+{% block page_title %}标签总览{% endblock %}
+{% block page_subtitle %}
+  <div class="text-muted text-sm mt-1">
+    全局标签（所有组可用）+ 各用户组专属标签，按作用域与名称排序；使用次数统计的是关联工单数。
+  </div>
+{% endblock %}
+{% block page_actions %}
+  {% if can_manage %}
+    <a class="btn btn-primary" href="{% url 'routing:tag_admin_list' %}">去管理</a>
+  {% endif %}
+  <a class="btn" href="{% url 'tickets:inbox' %}">返回收件箱</a>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <h2 style="margin:0">全部标签</h2>
+    <span class="text-muted text-xs">共 {{ page_obj.paginator.count }} 个</span>
+  </div>
+  <div class="overflow-auto">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>标签</th>
+          <th style="width:180px">作用域</th>
+          <th style="width:130px">颜色</th>
+          <th style="width:110px">使用次数</th>
+          <th style="width:160px">创建时间</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for tag in tags %}
+        <tr>
+          <td>
+            <span class="tag-badge tag-{{ tag.color }}">{{ tag.name }}</span>
+            {% if not tag.is_active %}<span class="badge badge-closed ml-1">已停用</span>{% endif %}
+            {% if tag.description %}<div class="text-muted text-xs mt-1">{{ tag.description }}</div>{% endif %}
+          </td>
+          <td class="text-sm">{{ tag.scope_label }}</td>
+          <td class="text-sm">{{ tag.get_color_display }}</td>
+          <td class="text-sm">{{ tag.usage_count }}</td>
+          <td class="text-muted text-xs">{{ tag.created_at|date:"Y-m-d H:i" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="empty">还没有任何标签。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% include "partials/_pagination.html" %}
+{% endblock %}

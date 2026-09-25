@@ -145,6 +145,27 @@ class Command(BaseCommand):
             },
         )
 
+        # 标签演示数据（v1.2：Tag/TicketTag 落地 §4.4 的 add_tag 动作）
+        from apps.tickets.models import Tag
+
+        Tag.objects.get_or_create(name="紧急", defaults={"color": "red", "description": "需要优先处理"})
+        Tag.objects.get_or_create(name="待客户确认", defaults={"color": "amber"})
+        Tag.objects.get_or_create(name="合同", group=tech, defaults={"color": "blue"})
+        Tag.objects.get_or_create(name="发票", group=finance, defaults={"color": "teal"})
+
+        # 一条"打标签"规则，演示 add_tag 动作真的会落到工单上
+        Rule.objects.get_or_create(
+            mailbox=unified,
+            match_field="subject",
+            match_op="contains",
+            match_value="紧急",
+            defaults={
+                "priority": 5,
+                "action_type": "add_tag",
+                "action_value": "紧急",
+            },
+        )
+
         Setting.set("fallback_group_id", tech.pk)
         Setting.set("fallback_mailbox_id", fallback.pk)
 

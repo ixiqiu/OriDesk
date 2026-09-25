@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}{% if editing %}编辑标签{% else %}新建标签{% endif %} · {{ site_name }}{% endblock %}
+{% block page_title %}{% if editing %}编辑标签{% else %}新建标签{% endif %}{% endblock %}
+{% block page_subtitle %}
+  <div class="text-muted text-sm mt-1">
+    作用域留空即全局标签（所有组可用）；选择用户组则为该组专属标签。同一作用域内标签名唯一（不区分大小写）。
+  </div>
+{% endblock %}
+{% block page_actions %}
+  <a class="btn" href="{% url 'routing:tag_admin_list' %}">返回列表</a>
+{% endblock %}
+
+{% block content %}
+<div class="content-narrow">
+  <div class="card">
+    <form method="post">
+      {% csrf_token %}
+      <div class="card-body">
+        {% if form.non_field_errors %}
+          <ul class="errorlist">{% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}</ul>
+        {% endif %}
+
+        <div class="form-row">
+          <label for="{{ form.name.id_for_label }}">{{ form.name.label }}</label>
+          {{ form.name }}
+          {% if form.name.help_text %}<div class="help">{{ form.name.help_text }}</div>{% endif %}
+          {% if form.name.errors %}<ul class="errorlist">{% for error in form.name.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+        </div>
+
+        <div class="flex gap-3 flex-wrap">
+          <div class="form-row" style="min-width:240px">
+            <label for="{{ form.group.id_for_label }}">{{ form.group.label }}</label>
+            {{ form.group }}
+            {% if form.group.help_text %}<div class="help">{{ form.group.help_text }}</div>{% endif %}
+            {% if form.group.errors %}<ul class="errorlist">{% for error in form.group.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+          </div>
+          <div class="form-row" style="min-width:160px">
+            <label for="{{ form.color.id_for_label }}">{{ form.color.label }}</label>
+            {{ form.color }}
+            {% if form.color.help_text %}<div class="help">{{ form.color.help_text }}</div>{% endif %}
+            {% if form.color.errors %}<ul class="errorlist">{% for error in form.color.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label for="{{ form.description.id_for_label }}">{{ form.description.label }}</label>
+          {{ form.description }}
+          {% if form.description.errors %}<ul class="errorlist">{% for error in form.description.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+        </div>
+
+        <div class="form-row">
+          <label for="{{ form.is_active.id_for_label }}">{{ form.is_active.label }}</label>
+          {{ form.is_active }}
+          {% if form.is_active.help_text %}<div class="help">{{ form.is_active.help_text }}</div>{% endif %}
+          {% if form.is_active.errors %}<ul class="errorlist">{% for error in form.is_active.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+        </div>
+
+        {% if editing %}
+        <div class="form-row">
+          <label>预览</label>
+          <div>
+            <span class="tag-badge tag-{{ tag.color }}">{{ tag.name }}</span>
+            <span class="text-muted text-xs ml-1">（{{ tag.scope_label }}）</span>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+      <div class="card-footer flex items-center justify-between">
+        <span class="text-muted text-xs">删除标签会级联移除工单关联，建议用「停用」代替删除。</span>
+        <div class="flex gap-2">
+          <a class="btn" href="{% url 'routing:tag_admin_list' %}">取消</a>
+          <button class="btn btn-primary" type="submit">保存标签</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

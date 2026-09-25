@@ -5,7 +5,7 @@ from __future__ import annotations
 from django.contrib import admin, messages
 from django.utils import timezone
 
-from apps.tickets.models import Attachment, Message, Ticket
+from apps.tickets.models import Attachment, Message, Tag, Ticket, TicketTag
 from apps.tickets.services import claim_ticket, set_status, unclaim_ticket
 
 
@@ -21,6 +21,16 @@ class AttachmentInline(admin.TabularInline):
 
     def has_add_permission(self, request, obj=None):
         return False
+
+
+class TicketTagInline(admin.TabularInline):
+    """工单详情页内联展示已打标签。"""
+
+    model = TicketTag
+    extra = 1
+    autocomplete_fields = ("tag",)
+    fields = ("tag", "source", "added_by", "created_at")
+    readonly_fields = ("created_at",)
 
 
 class MessageInline(admin.TabularInline):
@@ -53,7 +63,7 @@ class TicketAdmin(admin.ModelAdmin):
     search_fields = ("subject", "normalized_subject", "customer_email")
     date_hierarchy = "last_message_at"
     autocomplete_fields = ("assignee",)
-    inlines = [MessageInline]
+    inlines = [TicketTagInline, MessageInline]
     readonly_fields = ("created_at", "updated_at", "last_message_at")
     actions = ["action_claim_to_me", "action_unclaim", "action_mark_awaiting", "action_close", "action_reopen"]
 
@@ -127,3 +137,20 @@ class AttachmentAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         return False
+
+
+@admin.register(Tag)
+class TagAdmin(admin.ModelAdmin):
+    list_display = ("name", "scope_label", "color", "is_active", "ticket_count", "created_at")
+    list_filter = ("is_active", "color", "group")
+    search_fields = ("name", "description")
+    autocomplete_fields = ("group",)
+    list_editable = ("is_active",)
+
+
+@admin.register(TicketTag)
+class TicketTagAdmin(admin.ModelAdmin):
+    list_display = ("ticket", "tag", "source", "added_by", "created_at")
+    list_filter = ("source", "tag")
+    search_fields = ("ticket__subject", "tag__name")
+    autocomplete_fields = ("ticket", "tag", "added_by")

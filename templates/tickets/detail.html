@@ -71,6 +71,53 @@
 
   <aside style="flex:0 1 320px; min-width:280px">
     <div class="card">
+      <div class="card-header">
+        <h2 style="margin:0">标签</h2>
+        <span class="text-muted text-xs">{{ ticket_tags|length }} / {{ max_tags }}</span>
+      </div>
+      <div class="card-body">
+        {% if ticket_tags %}
+        <div class="tag-list mb-3">
+          {% for link in ticket_tags %}
+          <form method="post" action="{% url 'tickets:tag_remove' ticket.pk link.tag_id %}">
+            {% csrf_token %}
+            {% if link.tag.group_id and link.tag.group_id != ticket.group_id %}
+              <span class="tag-badge tag-{{ link.tag.color }}" style="opacity:.6"
+                    title="历史标签（原属「{{ link.tag.group.name }}」组），对本组工单不再可用，可移除">
+                {{ link.tag.name }}
+                <button class="tag-remove" type="submit" title="移除标签「{{ link.tag.name }}」">×</button>
+              </span>
+            {% else %}
+              <span class="tag-badge tag-{{ link.tag.color }}"
+                    {% if link.tag.description %}title="{{ link.tag.description }}"{% else %}title="移除标签「{{ link.tag.name }}」"{% endif %}>
+                {{ link.tag.name }}{% if not link.tag.is_active %}<span class="text-xs">（已停用）</span>{% endif %}
+                <button class="tag-remove" type="submit" title="移除标签「{{ link.tag.name }}」">×</button>
+              </span>
+            {% endif %}
+          </form>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-muted text-sm">暂无标签。</p>
+        {% endif %}
+
+        <form method="post" action="{% url 'tickets:tag_add' ticket.pk %}">
+          {% csrf_token %}
+          <div class="form-row">
+            <label for="{{ tag_form.tag.id_for_label }}">{{ tag_form.tag.label }}</label>
+            {{ tag_form.tag }}
+          </div>
+          <div class="form-row">
+            <label for="{{ tag_form.new_tag.id_for_label }}">{{ tag_form.new_tag.label }}</label>
+            {{ tag_form.new_tag }}
+            <div class="help">两者都填时优先使用下拉里的标签；新标签会建在「{{ ticket.group.name }}」作用域。</div>
+          </div>
+          <button class="btn btn-sm btn-primary" type="submit">添加标签</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="card mt-4">
       <div class="card-header"><h2 style="margin:0">工单操作</h2></div>
       <div class="card-body">
         <div class="form-row">

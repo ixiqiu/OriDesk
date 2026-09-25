@@ -47,7 +47,7 @@ def test_seed_demo_creates_and_is_idempotent(db):
     assert Group.objects.get(name="运维组").mailbox is None
     assert User.objects.filter(username="superadmin", is_superadmin=True).exists()
     assert UserGroup.objects.filter(user__username="tech1").count() == 1
-    assert Rule.objects.count() == 2
+    assert Rule.objects.count() == 3
     assert Setting.get_int("fallback_group_id") > 0
 
     # 演示邮箱凭据是加密存储的，能解出原文

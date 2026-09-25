@@ -52,6 +52,17 @@
         <option value="none" {% if filters.assignee == 'none' %}selected{% endif %}>未认领</option>
       </select>
     </div>
+    <div style="min-width:170px">
+      <label for="id_tag">标签</label>
+      <select name="tag" id="id_tag">
+        <option value="">全部标签</option>
+        {% for tag in tag_options %}
+          <option value="{{ tag.pk }}" {% if filters.tag|stringformat:'s' == tag.pk|stringformat:'s' %}selected{% endif %}>
+            {{ tag.name }}{% if tag.group %}（{{ tag.group.name }}）{% endif %}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
     <div class="flex gap-2">
       <button class="btn btn-primary" type="submit">筛选</button>
       <a class="btn" href="{{ request.path }}">重置</a>

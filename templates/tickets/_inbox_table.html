@@ -7,6 +7,7 @@
         <tr>
           <th style="width:70px">工单号</th>
           <th>主题</th>
+          <th style="width:200px">标签</th>
           <th style="width:200px">客户</th>
           <th style="width:130px">归属组</th>
           <th style="width:110px">认领人</th>
@@ -23,6 +24,26 @@
             {% if ticket.assignee_id and ticket.assignee_id == user.pk %}
               <span class="badge badge-claimed ml-1">我认领的</span>
             {% endif %}
+          </td>
+          <td>
+            {% with tags=ticket.ticket_tags.all %}
+            {% if tags %}
+            <div class="tag-list">
+              {% for link in tags|slice:":3" %}
+                {% if link.tag.group_id and link.tag.group_id != ticket.group_id %}
+                  <span class="tag-badge tag-{{ link.tag.color }}" style="opacity:.6"
+                        title="历史标签（原属「{{ link.tag.group.name }}」组）">{{ link.tag.name }}</span>
+                {% else %}
+                  <span class="tag-badge tag-{{ link.tag.color }}"
+                        title="{{ link.tag.description|default:link.tag.name }}">{{ link.tag.name }}</span>
+                {% endif %}
+              {% endfor %}
+              {% if tags|length > 3 %}<span class="text-muted text-xs">…+{{ tags|length|add:"-3" }}</span>{% endif %}
+            </div>
+            {% else %}
+            <span class="text-muted">—</span>
+            {% endif %}
+            {% endwith %}
           </td>
           <td class="text-sm">{{ ticket.customer_email }}</td>
           <td class="text-sm">{{ ticket.group.name }}</td>
