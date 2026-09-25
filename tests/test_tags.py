@@ -325,3 +325,30 @@ def test_foreign_tag_after_reassign(ticket, tech_group, finance_group, tech_user
     flags = {link.tag.name: link.is_foreign for link in ticket.ticket_tags.select_related("tag")}
     assert flags["技术专属"] is True
     assert flags["紧急"] is False
+
+
+def test_rejected_tag_does_not_leave_orphan_tag_row(ticket, tech_user):
+    """被"超过上限"拒绝的请求不得在标签字典里留下孤立标签（服务层顺序修正）。"""
+    from apps.tickets.models import MAX_TAGS_PER_TICKET
+
+    for index in range(MAX_TAGS_PER_TICKET):
+        add_tag(ticket, f"容量{index:02d}", user=tech_user)
+
+    before = Tag.objects.count()
+    with pytest.raises(ValueError):
+        add_tag(ticket, "第二十一个", user=tech_user)
+    assert Tag.objects.count() == before
+    assert not Tag.objects.filter(name="第二十一个").exists()
+
+
+def test_find_tag_reports_best_match_for_error_messages(ticket, tech_group, finance_group):
+    """find_tag 永不创建，且优先返回本组标签，便于给出准确提示。"""
+    from apps.tickets.services import find_tag
+
+    global_tag = Tag.objects.create(name="紧急")
+    assert find_tag("紧急", group=tech_group) == global_tag
+    assert find_tag("不存在", group=tech_group) is None
+    foreign = Tag.objects.create(name="发票", group=finance_group)
+    # 同名标签只在别的组存在时，也要能查到它（用于提示"属于用户组 X"）
+    assert find_tag("发票", group=tech_group) == foreign
+    assert Tag.objects.count() == 2  # 没有任何隐式创建

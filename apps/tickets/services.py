@@ -290,6 +290,30 @@ def resolve_tag(name: str, *, group=None, create: bool = True):
         return Tag.objects.filter(name=normalized, group=group).first()
 
 
+def find_tag(name: str, *, group=None):
+    """按名称查标签（不限启用状态与归属作用域），返回最匹配的一个。
+
+    匹配顺序：本组专属 > 全局 > 其他组同名（用于给出准确的错误提示）。
+    与 `resolve_tag` 的区别：本函数**永不创建**，也不会因为"同名但不可用"而返回 None。
+    """
+    from apps.tickets.models import Tag
+
+    normalized = Tag.normalize_name(name)
+    if not normalized:
+        return None
+    candidates = list(Tag.objects.filter(name__iexact=normalized).select_related("group"))
+    if not candidates:
+        return None
+    if group is not None:
+        for tag in candidates:
+            if tag.group_id == group.pk:
+                return tag
+    for tag in candidates:
+        if tag.group_id is None:
+            return tag
+    return candidates[0]
+
+
 def is_tag_available_for(tag, group) -> bool:
     """标签是否可用于该组的工单（全局标签人人可用，组标签仅限本组，且必须启用）。"""
     return tag.is_available_for(group)
@@ -298,37 +322,58 @@ def is_tag_available_for(tag, group) -> bool:
 def add_tag(ticket, tag_or_name, user=None, source: str = "manual", *, record_audit: bool = True):
     """给工单打标签（幂等）。返回 (TicketTag, created)。
 
-    - 传 Tag 实例直接用；传字符串则按当前工单的组解析/新建；
-    - 同一工单同一标签只保留一条记录（模型层唯一约束 + 这里先查后建）；
-    - 人工添加写审计（操作记录时间线可见），规则添加由调用方合并为一条审计。
+    执行顺序（重要）：
+      1. 参数归一化 → 空名直接拒绝；
+      2. **查找**标签（不创建）：命中则校验"已停用 / 属于别的组"并给出准确提示；
+      3. 未命中 → 这是全新标签：**先查单工单数量上限**，通过后才创建 Tag；
+      4. 已存在关联 → 幂等返回（不占新额度、不写审计）；否则建关联。
+
+    这样即使因为"超过上限"被拒，也不会残留一条没有任何工单引用的孤立标签。
     """
     from apps.tickets.models import MAX_TAGS_PER_TICKET, Tag, TicketTag
 
     if isinstance(tag_or_name, Tag):
         tag = tag_or_name
     else:
-        tag = resolve_tag(tag_or_name, group=ticket.group)
-    if tag is None:
-        raise ValueError("标签名不能为空、或该标签已停用。")
+        normalized = Tag.normalize_name(tag_or_name)
+        if not normalized:
+            raise ValueError("标签名不能为空。")
+        tag = find_tag(normalized, group=ticket.group)
 
-    # 作用域与启用状态校验（界面下拉已限制，服务层再兜一层——服务层才是闸门）
-    if not tag.is_active:
-        raise ValueError(f"标签「{tag.name}」已停用，无法使用；如需恢复请在标签管理里启用。")
-    if not is_tag_available_for(tag, ticket.group):
-        raise ValueError(
-            f"标签「{tag.name}」属于用户组「{tag.scope_label}」，不能用于本工单。"
-        )
+    def _count() -> int:
+        return TicketTag.objects.filter(ticket=ticket).count()
 
-    if not TicketTag.objects.filter(ticket=ticket, tag=tag).exists():
-        if TicketTag.objects.filter(ticket=ticket).count() >= MAX_TAGS_PER_TICKET:
-            raise ValueError(f"单个工单最多 {MAX_TAGS_PER_TICKET} 个标签，请先移除不再需要的标签。")
+    def _assert_quota() -> None:
+        if _count() >= MAX_TAGS_PER_TICKET:
+            raise ValueError(
+                f"单个工单最多 {MAX_TAGS_PER_TICKET} 个标签，请先移除不再需要的标签。"
+            )
 
-    link, created = TicketTag.objects.get_or_create(
+    if tag is not None:
+        if not tag.is_active:
+            raise ValueError(f"标签「{tag.name}」已停用，无法使用；如需恢复请在标签管理里启用。")
+        if not is_tag_available_for(tag, ticket.group):
+            raise ValueError(
+                f"标签「{tag.name}」属于用户组「{tag.scope_label}」，不能用于本工单。"
+            )
+        existing = TicketTag.objects.filter(ticket=ticket, tag=tag).first()
+        if existing is not None:
+            return existing, False
+        _assert_quota()
+    else:
+        # 全新标签：先卡上限，再落库，避免留下孤立 Tag
+        _assert_quota()
+        tag = resolve_tag(tag_or_name, group=ticket.group, create=True)
+        if tag is None:
+            raise ValueError("标签名不能为空、或存在同名但已停用的标签。")
+
+    link = TicketTag.objects.create(
         ticket=ticket,
         tag=tag,
-        defaults={"added_by": user if source == "manual" else None, "source": source},
+        added_by=user if source == "manual" else None,
+        source=source,
     )
-    if created and record_audit:
+    if record_audit:
         audit(
             user=user,
             action="config_change",
@@ -336,7 +381,7 @@ def add_tag(ticket, tag_or_name, user=None, source: str = "manual", *, record_au
             group=ticket.group,
             detail={"event": "tag_added", "tag": tag.name, "source": source},
         )
-    return link, created
+    return link, True
 
 
 def remove_tag(ticket, tag, user=None, *, record_audit: bool = True) -> bool:

@@ -81,8 +81,8 @@
           {% for link in ticket_tags %}
           <form method="post" action="{% url 'tickets:tag_remove' ticket.pk link.tag_id %}">
             {% csrf_token %}
-            {% if link.tag.group_id and link.tag.group_id != ticket.group_id %}
-              <span class="tag-badge tag-{{ link.tag.color }}" style="opacity:.6"
+            {% if link.is_foreign %}
+              <span class="tag-badge tag-{{ link.tag.color }} tag-foreign"
                     title="历史标签（原属「{{ link.tag.group.name }}」组），对本组工单不再可用，可移除">
                 {{ link.tag.name }}
                 <button class="tag-remove" type="submit" title="移除标签「{{ link.tag.name }}」">×</button>

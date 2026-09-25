@@ -204,3 +204,5 @@ input[type=checkbox], input[type=radio] { width: auto; }
   opacity: .65; padding: 0 0 0 2px; font-size: .95em; line-height: 1;
 }
 .tag-remove:hover { opacity: 1; }
+.tag-foreign { opacity: .6; border-style: dashed; }
+.tag-foreign .tag-remove { opacity: .8; }
