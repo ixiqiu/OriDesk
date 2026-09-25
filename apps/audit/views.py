@@ -157,6 +157,17 @@ def _summary(log: AuditLog) -> str:
     return text[:120] + ("…" if len(text) > 120 else "")
 
 
+def _csv_safe(value) -> str:
+    r"""防 CSV 注入：以 = + - @ 制表符/回车开头的单元格在 Excel 中会被当公式执行。
+
+    审计明细里可能含有客户可控内容（如邮件主题），因此统一加单引号前缀。
+    """
+    text = "" if value is None else str(value)
+    if text and text[0] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + text
+    return text
+
+
 def _csv_response(queryset) -> HttpResponse:
     stamp = timezone.localdate().strftime("%Y%m%d")
     response = HttpResponse(content_type="text/csv; charset=utf-8")
@@ -169,12 +180,12 @@ def _csv_response(queryset) -> HttpResponse:
         writer.writerow(
             [
                 timezone.localtime(log.created_at).strftime("%Y-%m-%d %H:%M:%S"),
-                log.get_action_display(),
-                log.user.display_name if log.user else "系统",
+                _csv_safe(log.get_action_display()),
+                _csv_safe(log.user.display_name if log.user else "系统"),
                 f"[T#{log.ticket_id}]" if log.ticket_id else "",
-                log.group.name if log.group else "",
-                log.identity_email or "",
-                _summary(log),
+                _csv_safe(log.group.name if log.group else ""),
+                _csv_safe(log.identity_email or ""),
+                _csv_safe(_summary(log)),
             ]
         )
     return response
