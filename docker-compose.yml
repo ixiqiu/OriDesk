@@ -1,0 +1,185 @@
+# ===========================================================================
+# 新技元邮箱及工单管理系统 · 生产编排（开发文档 §9 部署架构）
+#
+# 拓扑：
+#   Internet → 宿主机 Nginx（HTTPS / 静态文件 / 反代）→ 127.0.0.1:8000 → web 容器
+#   web / worker / scheduler 使用同一镜像，仅启动命令与角色不同。
+#
+# 使用前必读：
+#   1) cp .env.example .env  并填写真实值
+#      （SECRET_KEY / DB_PASSWORD / FERNET_KEY 用 $(openssl rand -base64 48) 之类方式生成，
+#        绝不要沿用 .env.example 里的示例文本；.env 不入库、不进镜像）
+#   2) 宿主机准备目录并授权给容器内 uid/gid 10001：
+#        sudo mkdir -p /srv/ticket-system/{media,staticfiles,backups}
+#        sudo chown -R 10001:10001 /srv/ticket-system/media /srv/ticket-system/staticfiles
+#   3) docker compose up -d --build
+#   4) curl -fsS http://127.0.0.1:8000/healthz    # {"status":"ok","database":true}
+#
+# 说明：DB_PASSWORD / DB_ROOT_PASSWORD 使用 ${VAR:?} 强校验——缺配置时 compose 直接报错
+#       退出，而不是用空密码或占位密码把数据库跑起来。这是刻意设计的"失败要响"。
+# ===========================================================================
+name: oridesk
+
+# ---------------------------------------------------------------- 公共片段
+x-app: &app
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: oridesk/app:latest
+  restart: unless-stopped
+  # 容器内 PID 1 由 tini 托管，配合 entrypoint 末尾的 exec，信号处理与僵尸回收更可靠
+  init: true
+  security_opt:
+    - no-new-privileges:true
+  env_file:
+    - .env
+  depends_on:
+    db:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "5"
+
+# 容器内连接拓扑：即使 .env 还是本地开发用的 DB_ENGINE=sqlite / REDIS_URL=127.0.0.1，
+# 这里也强制指向 compose 内的 db / redis，避免"容器连到 SQLite 空库"的静默故障。
+# compose 的 environment 优先级高于 env_file。
+x-app-env: &app-env
+  DB_ENGINE: mysql
+  DB_HOST: db
+  DB_PORT: "3306"
+  DB_NAME: ${DB_NAME:-ticket_system}
+  REDIS_URL: redis://redis:6379/0
+
+services:
+  # ------------------------------------------------------------------ Web
+  web:
+    <<: *app
+    container_name: oridesk-web
+    command: ["gunicorn", "config.wsgi:application", "-b", "0.0.0.0:8000"]
+    environment:
+      <<: *app-env
+      APP_ROLE: web
+    # 只对宿主机本机开放：外部流量必须经 Nginx（HTTPS + 静态文件 + 安全头）
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8000}:8000"
+    volumes:
+      - ${HOST_MEDIA_DIR:-/srv/ticket-system/media}:/app/media
+      - ${HOST_STATIC_DIR:-/srv/ticket-system/staticfiles}:/app/staticfiles
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=5).status == 200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      # entrypoint 要等 DB/Redis + migrate + collectstatic，首次启动给足时间
+      start_period: 120s
+    stop_grace_period: 30s
+
+  # --------------------------------------------------------------- Worker
+  # RQ worker：处理 default（通用）与 mail（收信/发信/附件）两个队列
+  worker:
+    <<: *app
+    container_name: oridesk-worker
+    command: ["python", "manage.py", "rqworker", "default", "mail"]
+    environment:
+      <<: *app-env
+      APP_ROLE: worker
+    volumes:
+      - ${HOST_MEDIA_DIR:-/srv/ticket-system/media}:/app/media
+    healthcheck:
+      # 真实存活信号：RQ worker 会以 TTL（默认 worker_ttl+60=480s）持续续期
+      # rq:worker:<id> 心跳键。集合 rq:workers 中有任一键仍有 TTL，即认为 worker 活着。
+      # 注意：容器 healthy ≠ 队列不积压，队列深度巡检见 docs/运维手册.md §2。
+      test: ["CMD", "python", "-c", "import os,redis,sys; r=redis.from_url(os.environ['REDIS_URL'], socket_connect_timeout=5); sys.exit(0 if any((r.ttl(k) or 0) > 0 for k in r.smembers('rq:workers')) else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    # 给正在处理的发信任务留出收尾时间，避免"邮件已发出但记录未落库"的半完成状态
+    stop_grace_period: 60s
+
+  # ------------------------------------------------------------ Scheduler
+  # APScheduler 定时任务：IMAP 轮询同步（python manage.py runapscheduler）
+  scheduler:
+    <<: *app
+    container_name: oridesk-scheduler
+    command: ["python", "manage.py", "runapscheduler"]
+    environment:
+      <<: *app-env
+      APP_ROLE: scheduler
+    volumes:
+      - ${HOST_MEDIA_DIR:-/srv/ticket-system/media}:/app/media
+    healthcheck:
+      # 调度器最关键的前置依赖是数据库（读邮箱配置、写工单）；
+      # 这里直接做一次真实连接 + 鉴权，能顺带发现密码错误、库被删等问题。
+      test: ["CMD", "python", "-c", "import os,pymysql; pymysql.connect(host=os.environ.get('DB_HOST','db'), port=int(os.environ.get('DB_PORT','3306')), user=os.environ['DB_USER'], password=os.environ['DB_PASSWORD'], database=os.environ.get('DB_NAME','ticket_system'), charset='utf8mb4', connect_timeout=5).close()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # --------------------------------------------------------------- MariaDB
+  db:
+    image: mariadb:11
+    container_name: oridesk-db
+    restart: unless-stopped
+    # 字符集必须是 utf8mb4：否则中文与 emoji 会截断/乱码（开发文档 §8.1）。
+    # sql_mode 显式加严格模式：Django 连接还会用 init_command 再设一次会话级
+    # STRICT_TRANS_TABLES，这里的服务器默认值主要保护 mariadb/mariadb-dump 等原生客户端。
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --sql-mode=STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+    environment:
+      MARIADB_DATABASE: ${DB_NAME:-ticket_system}
+      MARIADB_USER: ${DB_USER:-ticket}
+      MARIADB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD 未设置：请先按 .env.example 配置 .env}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD 未设置：请先按 .env.example 配置 .env}
+      TZ: ${DJANGO_TIME_ZONE:-Asia/Shanghai}
+      MARIADB_AUTO_UPGRADE: "1"
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      # 官方镜像自带 healthcheck.sh：--connect 验证 TCP，--innodb_initialized 表示数据目录就绪
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # ----------------------------------------------------------------- Redis
+  # RQ broker + 缓存（config/settings.py 的 RQ_QUEUES: default / mail）
+  redis:
+    image: redis:7-alpine
+    container_name: oridesk-redis
+    restart: unless-stopped
+    # 开启 AOF：队列里可能压着"待发送回复"任务，Redis 重启不应把它们丢掉。
+    # appendfsync 保持默认 everysec（最多丢 1 秒写入，远优于整队列丢失）。
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  # MariaDB 数据目录：备份请用 scripts/backup.sh 的逻辑备份，不要直接拷这个卷
+  db_data:
+  # Redis AOF 文件：仅承载队列/缓存，可不纳入备份
+  redis_data:
