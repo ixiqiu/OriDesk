@@ -12,6 +12,35 @@ from django.urls import reverse
 # 危险扩展名：仅可下载，不允许在线预览（开发文档 §6.3）
 DANGEROUS_EXTENSIONS = {".exe", ".bat", ".js", ".scr", ".vbs", ".cmd", ".com", ".msi", ".jar", ".ps1"}
 
+# 可安全内联预览的类型白名单（存储型 XSS 防护，见 docs/安全清单核查.md R-3）：
+# - HTML / SVG / XHTML / XML 等"活动内容"一律不在白名单内，只能下载；
+# - 其余未知类型也一律不可预览；
+# - 预览响应固定带 X-Content-Type-Options: nosniff，避免浏览器把伪装成图片的文件按 HTML 解析。
+PREVIEWABLE_MIME_TYPES = {
+    "image/png",
+    "image/jpeg",
+    "image/jpg",
+    "image/gif",
+    "image/webp",
+    "image/bmp",
+    "text/plain",
+    "application/pdf",
+}
+
+# 扩展名 → 兜底 MIME（当附件没有 MIME 头时使用）
+SAFE_EXTENSION_MIME = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".bmp": "image/bmp",
+    ".txt": "text/plain",
+    ".log": "text/plain",
+    ".csv": "text/plain",
+    ".pdf": "application/pdf",
+}
+
 
 class Ticket(models.Model):
     STATUS_CHOICES = [
@@ -217,14 +246,42 @@ class Attachment(models.Model):
         return self.filename
 
     @property
+    def normalized_filename(self) -> str:
+        """规范化文件名：去掉控制字符，并剥离尾部空格与点。
+
+        Windows 与多数浏览器保存时会**丢弃**文件名结尾的空格与点，
+        因此 `tool.exe.` / `tool.exe ` 实际落地为 `tool.exe`，
+        若不规范化就会绕过危险扩展名判断（已由 tests/test_fuzz_security.py 覆盖）。
+        """
+        name = (self.filename or "").replace("\\", "/").split("/")[-1]
+        name = "".join(ch for ch in name if ch.isprintable() or ch == " ")
+        return name.strip().rstrip(". ").strip()
+
+    @property
     def extension(self) -> str:
-        _, _, ext = self.filename.rpartition(".")
-        return f".{ext.lower()}" if ext else ""
+        name = self.normalized_filename
+        _, _, ext = name.rpartition(".")
+        return f".{ext.lower()}" if ext and ext != name else ""
 
     @property
     def is_dangerous(self) -> bool:
         """危险扩展名标记为不可预览，仅可下载（§6.3）。"""
         return self.extension in DANGEROUS_EXTENSIONS
+
+    @property
+    def effective_mime(self) -> str:
+        """用于响应的 MIME：以白名单为准，未知/缺失类型按扩展名兜底。"""
+        mime = (self.mime or "").split(";")[0].strip().lower()
+        if mime in PREVIEWABLE_MIME_TYPES:
+            return mime
+        return SAFE_EXTENSION_MIME.get(self.extension, "")
+
+    @property
+    def is_previewable(self) -> bool:
+        """能否在线预览：仅白名单内的安全类型（HTML/SVG/脚本等一律只能下载）。"""
+        if self.is_dangerous:
+            return False
+        return bool(self.effective_mime) and self.effective_mime in PREVIEWABLE_MIME_TYPES
 
     @property
     def size_display(self) -> str:

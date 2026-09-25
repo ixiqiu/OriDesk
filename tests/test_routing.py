@@ -18,11 +18,12 @@ CUSTOMER = "customer@customer-domain.com"
 
 def test_sticky_within_window(unified_mailbox, tech_group, finance_group):
     now = timezone.now()
+    Setting.set("sticky_window_days", 7)  # 显式固定窗口，避免依赖默认值或被其他用例污染
     make_ticket(
         mailbox=unified_mailbox,
         group=tech_group,
         customer_email=CUSTOMER,
-        last_message_at=now - timedelta(days=3),
+        last_message_at=now - timedelta(days=4),
     )
     Rule.objects.create(
         mailbox=unified_mailbox,
@@ -35,12 +36,53 @@ def test_sticky_within_window(unified_mailbox, tech_group, finance_group):
     )
 
     msg = build_email(sender=CUSTOMER, subject="发票问题")
-    # 3 天内在窗口内（默认 7 天）→ 粘性优先，仍归技术支持组
+    # 4 天前有往来（窗口 7 天）→ 粘性优先，仍归技术支持组
     assert route_ticket(msg, CUSTOMER, unified_mailbox, now=now) == tech_group
+
+
+def test_sticky_window_boundary_is_inclusive(unified_mailbox, tech_group, finance_group):
+    """边界语义固定为含等号：正好 N 天前算窗口内。"""
+    now = timezone.now()
+    Setting.set("sticky_window_days", 7)
+    make_ticket(
+        mailbox=unified_mailbox,
+        group=tech_group,
+        customer_email=CUSTOMER,
+        last_message_at=now - timedelta(days=7),
+    )
+    msg = build_email(sender=CUSTOMER, subject="任意主题")
+    assert route_ticket(msg, CUSTOMER, unified_mailbox, now=now) == tech_group
+
+
+@pytest.mark.parametrize("window", [0, -1])
+def test_sticky_disabled_for_non_positive_window(
+    unified_mailbox, tech_group, finance_group, admin_group, window
+):
+    """窗口设为 0 或负数表示关闭粘性，不得因 >= 含等号而误判。"""
+    now = timezone.now()
+    Setting.set("sticky_window_days", window)
+    make_ticket(
+        mailbox=unified_mailbox,
+        group=tech_group,
+        customer_email=CUSTOMER,
+        last_message_at=now,
+    )
+    Rule.objects.create(
+        mailbox=unified_mailbox,
+        priority=10,
+        match_field="subject",
+        match_op="contains",
+        match_value="发票",
+        action_type="assign_group",
+        action_value=str(finance_group.pk),
+    )
+    msg = build_email(sender=CUSTOMER, subject="发票问题")
+    assert route_ticket(msg, CUSTOMER, unified_mailbox, now=now) == finance_group
 
 
 def test_sticky_outside_window(unified_mailbox, tech_group, finance_group):
     now = timezone.now()
+    Setting.set("sticky_window_days", 7)
     make_ticket(
         mailbox=unified_mailbox,
         group=tech_group,

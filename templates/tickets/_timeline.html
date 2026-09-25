@@ -31,10 +31,10 @@
           <li class="flex items-center gap-2 border rounded px-3 py-2">
             <span class="text-sm">{{ attachment.filename }}</span>
             <span class="text-xs text-muted">{{ attachment.size_display }}</span>
-            {% if attachment.is_dangerous %}
-              <span class="badge badge-danger">不可预览</span>
-            {% else %}
+            {% if attachment.is_previewable %}
               <a class="btn btn-sm" href="{% url 'tickets:attachment_preview' attachment.pk %}" target="_blank" rel="noopener">预览</a>
+            {% else %}
+              <span class="badge badge-danger" title="该类型不允许在线预览（HTML/SVG/可执行文件等），请下载后自行确认安全性">不可预览</span>
             {% endif %}
             <a class="btn btn-sm" href="{% url 'tickets:attachment_download' attachment.pk %}">下载</a>
           </li>

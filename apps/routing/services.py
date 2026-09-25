@@ -84,10 +84,13 @@ def route_ticket(msg, sender: str, mailbox, now=None) -> Group:
         return entry_group
 
     # 1. 短期粘性：同发件人 N 天内再次进线，归原组
+    #    窗口必须为正整数才启用（sticky_window_days=0 或负数视为关闭粘性，
+    #    否则 "last_message_at == now" 会因 >= 含等号而被判为粘性）。
     window_days = sticky_window_days()
-    last = recent_ticket_for_sender(sender, now=now)
-    if last and last.last_message_at and last.last_message_at >= now - timedelta(days=window_days):
-        return last.group
+    if window_days > 0:
+        last = recent_ticket_for_sender(sender, now=now)
+        if last and last.last_message_at and last.last_message_at >= now - timedelta(days=window_days):
+            return last.group
 
     # 2. 规则匹配
     rule = match_rule(msg, mailbox) if mailbox is not None else None

@@ -152,6 +152,20 @@ class Setting(models.Model):
         )
         return row
 
+    @classmethod
+    def bulk_set(cls, values: dict, *, user=None) -> int:
+        """批量写入配置（会逐项失效缓存并写审计）。
+
+        注意：**不要**用 `Setting.objects.filter(...).update(...)` 直接改值——
+        Django 的 `QuerySet.update()` 既不触发 `save()` 也不发信号，缓存不会失效，
+        最长 30 秒（SETTING_CACHE_TTL）内各进程仍可能读到旧值。
+        """
+        count = 0
+        for key, value in values.items():
+            cls.set(key, value, user=user)
+            count += 1
+        return count
+
     def save(self, *args, **kwargs):
         result = super().save(*args, **kwargs)
         cache.delete(f"{SETTING_CACHE_PREFIX}{self.key}")

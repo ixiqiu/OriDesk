@@ -320,7 +320,7 @@ def attachment_download(request, pk: int):
 @login_required
 def attachment_preview(request, pk: int):
     attachment = _visible_attachment(request.user, pk)
-    if attachment.is_dangerous:
+    if not attachment.is_previewable:
         raise PermissionDenied("该附件类型不允许在线预览，请下载后自行确认安全性。")
     return _serve_attachment(attachment, as_attachment=False)
 
@@ -328,14 +328,25 @@ def attachment_preview(request, pk: int):
 def _serve_attachment(attachment: Attachment, *, as_attachment: bool):
     """在完成可见性校验后把附件发给客户端。
 
+    存储型 XSS 防护（见 docs/安全清单核查.md R-3）：
+    - 在线预览只允许白名单内的安全类型（PNG/JPEG/GIF/WebP/BMP/纯文本/PDF）；
+      HTML、SVG、XHTML、XML 等"活动内容"以及未知类型一律只能下载；
+    - 预览响应用白名单 MIME（而不是发件人可控的原始 MIME），并强制
+      `X-Content-Type-Options: nosniff` 与 `Content-Security-Policy: default-src 'none'; sandbox`，
+      即使内容被伪装成图片也无法在应用同源执行脚本。
+
     生产环境推荐配置 `ATTACHMENT_X_ACCEL_PREFIX`（如 `/media/attachments/`），
     由 Nginx 的 `internal` location 负责传输（X-Accel-Redirect），
     这样 `/media/` 目录不必对外暴露：未通过 Django 鉴权的直链一律 404。
     未配置时由 Django 直接流式返回（本地开发/单机部署可用）。
     """
-    content_type = attachment.mime or "application/octet-stream"
     disposition = content_disposition_header(as_attachment, attachment.filename)
     prefix = getattr(settings, "ATTACHMENT_X_ACCEL_PREFIX", "") or ""
+
+    if as_attachment:
+        content_type = attachment.mime or "application/octet-stream"
+    else:
+        content_type = attachment.effective_mime or "application/octet-stream"
 
     if prefix:
         response = HttpResponse(content_type=content_type)
@@ -343,14 +354,18 @@ def _serve_attachment(attachment: Attachment, *, as_attachment: bool):
         # 头部值必须是 ASCII：附件名可能含中文，这里做百分号编码，
         # 否则 Django 会按 RFC2047 编码整个头部，Nginx 无法解析。
         response["X-Accel-Redirect"] = f"{prefix.rstrip('/')}/{quote(attachment.path)}"
-        return response
+    else:
+        try:
+            handle = storage.absolute_path(attachment.path).open("rb")
+        except (OSError, ValueError) as exc:
+            raise Http404("附件文件已不存在。") from exc
+        response = FileResponse(handle, as_attachment=as_attachment, filename=attachment.filename)
+        response["Content-Type"] = content_type
 
-    try:
-        handle = storage.absolute_path(attachment.path).open("rb")
-    except (OSError, ValueError) as exc:
-        raise Http404("附件文件已不存在。") from exc
-    response = FileResponse(handle, as_attachment=as_attachment, filename=attachment.filename)
-    response["Content-Type"] = content_type
+    response["X-Content-Type-Options"] = "nosniff"
+    if not as_attachment:
+        response["Content-Security-Policy"] = "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox"
+        response["Referrer-Policy"] = "no-referrer"
     return response
 
 
