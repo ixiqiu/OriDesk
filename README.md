@@ -3,7 +3,8 @@
 一套自部署的多用户共享邮箱与工单系统：连接飞书企业邮箱的 IMAP/SMTP，把统一邮箱、各用户组专用邮箱、全局兜底邮箱的来信转成工单，按主题路由到用户组，支持组内协作、组身份发信、自动回复、改派与全链路审计。
 
 - 开发依据：[开发文档 v1.1](docs/新技元邮箱及工单管理系统-开发文档-v1.1.md)（技术栈 §8 / 部署架构 §9 / 安全清单 §10 / MVP 路线 §11）
-- 部署手册：[docs/部署手册.md](docs/部署手册.md)
+- 部署手册（Docker Compose 路径）：[docs/部署手册.md](docs/部署手册.md)
+- 非 Docker 部署（systemd + Gunicorn + 宿主 MariaDB/Redis）：[docs/非Docker部署.md](docs/非Docker部署.md)
 - 邮箱接入指南（换服务商 / 图形化配置 / 授权码与故障排查）：[docs/邮箱接入指南.md](docs/邮箱接入指南.md)
 - 运维手册：[docs/运维手册.md](docs/运维手册.md)
 
@@ -122,6 +123,17 @@ curl -fsS http://127.0.0.1:8000/healthz
 
 打开 <http://127.0.0.1:8000/> 进入收件箱，<http://127.0.0.1:8000/admin/> 进入管理后台。
 邮箱授权码加密依赖 `FERNET_KEY`，**同一个密钥必须长期保留**：换掉它，库里的邮箱凭据就全部解不开（见 [FAQ](#12-faq)）。
+
+### 3.1.5 上线前自检（两条路径都适用）
+
+```bash
+python manage.py deploy_check            # 有 FAIL 时退出码 1
+python manage.py deploy_check --strict   # WARN 也算失败，可放进上线闸门
+```
+
+它把《部署手册》的检查清单变成一条命令：DEBUG/ALLOWED_HOSTS/SECRET_KEY/FERNET_KEY 是否合规、
+数据库可达性与字符集是否 utf8mb4、是否有未应用的迁移、邮箱凭据能否解密、兜底邮箱是否唯一、
+管理员组与兜底组是否配置、MEDIA/STATIC 是否可写、附件是否走 X-Accel、Redis 与自动回复模板是否就绪。
 
 ### 3.2 路径 B：Docker Compose（与生产同构）
 
