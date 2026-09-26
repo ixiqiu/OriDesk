@@ -61,6 +61,71 @@
             <div class="help">{{ form.imap_poll_interval_seconds.help_text }}</div>
             {% if form.imap_poll_interval_seconds.errors %}<ul class="errorlist">{% for error in form.imap_poll_interval_seconds.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
           </div>
+
+          <div class="form-row" style="border-top:1px solid var(--border,#e5e7eb);padding-top:16px;margin-top:8px">
+            <h3 style="margin:0 0 4px">移动端推送</h3>
+            <div class="help">
+              配置后安卓客户端才能收到工单通知。部署步骤见 docs/移动端API约定.md §7：
+              需先起 ntfy 服务（docker compose 已含），再用 ntfy 命令建用户与令牌。
+            </div>
+          </div>
+
+          <div class="form-row">
+            <label for="{{ form.ntfy_enabled.id_for_label }}">{{ form.ntfy_enabled.label }}</label>
+            {{ form.ntfy_enabled }}
+            <div class="help">{{ form.ntfy_enabled.help_text }}</div>
+            {% if form.ntfy_enabled.errors %}<ul class="errorlist">{% for error in form.ntfy_enabled.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+          </div>
+
+          <div class="form-row">
+            <label for="{{ form.ntfy_server_url.id_for_label }}">{{ form.ntfy_server_url.label }}</label>
+            {{ form.ntfy_server_url }}
+            <div class="help">{{ form.ntfy_server_url.help_text }}</div>
+            {% if form.ntfy_server_url.errors %}<ul class="errorlist">{% for error in form.ntfy_server_url.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+          </div>
+
+          <div class="form-row">
+            <label for="{{ form.ntfy_token.id_for_label }}">{{ form.ntfy_token.label }}</label>
+            {{ form.ntfy_token }}
+            <div class="help">
+              {{ form.ntfy_token.help_text }}
+              当前状态：
+              {% if ntfy_token_set %}
+                <span class="text-success">已配置</span>
+              {% else %}
+                <span class="text-warning">未配置</span>
+              {% endif %}
+              （令牌以密文入库，页面永不回显）
+            </div>
+            {% if form.ntfy_token.errors %}<ul class="errorlist">{% for error in form.ntfy_token.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+          </div>
+
+          <div class="form-row">
+            <label for="{{ form.ntfy_token_clear.id_for_label }}">{{ form.ntfy_token_clear.label }}</label>
+            {{ form.ntfy_token_clear }}
+            <div class="help">{{ form.ntfy_token_clear.help_text }}</div>
+          </div>
+
+          <div class="form-row">
+            <label for="{{ form.ntfy_topic_prefix.id_for_label }}">{{ form.ntfy_topic_prefix.label }}</label>
+            {{ form.ntfy_topic_prefix }}
+            <div class="help">{{ form.ntfy_topic_prefix.help_text }}</div>
+            {% if form.ntfy_topic_prefix.errors %}<ul class="errorlist">{% for error in form.ntfy_topic_prefix.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+          </div>
+
+          <div class="form-row">
+            <label for="{{ form.notify_aggregate_seconds.id_for_label }}">{{ form.notify_aggregate_seconds.label }}</label>
+            {{ form.notify_aggregate_seconds }}
+            <div class="help">{{ form.notify_aggregate_seconds.help_text }}</div>
+            {% if form.notify_aggregate_seconds.errors %}<ul class="errorlist">{% for error in form.notify_aggregate_seconds.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+          </div>
+
+          <div class="form-row">
+            <label for="{{ form.mobile_public_base_url.id_for_label }}">{{ form.mobile_public_base_url.label }}</label>
+            {{ form.mobile_public_base_url }}
+            <div class="help">{{ form.mobile_public_base_url.help_text }}</div>
+            {% if form.mobile_public_base_url.errors %}<ul class="errorlist">{% for error in form.mobile_public_base_url.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+          </div>
         </div>
         <div class="card-footer flex items-center justify-between">
           <span class="text-muted text-xs">默认值：粘性 7 天 · 首触 24 小时 · 附件 25 MB · 轮询 60 秒。</span>

@@ -390,6 +390,163 @@ def test_settings_page_shows_unconfigured_fallback_warning(client, manager):
     assert "未配置" in content
 
 
+# ---------------------------------------------------- 系统设置 · 移动端推送
+# 这组用例的存在理由：推送配置**只加进 Setting.DEFAULTS 是不够的** ——
+# SystemSettingsForm 是固定字段表单，没有 UI 入口管理员就永远配不起来，
+# 而症状是"App 里点启用推送没反应"，从后端代码完全看不出问题。
+
+
+def _push_post(**overrides):
+    """一份完整的设置 POST，默认值合法；用 overrides 改单项。"""
+    payload = {
+        "sticky_window_days": 7,
+        "first_contact_window_hours": 24,
+        "fallback_group_id": "",
+        "fallback_mailbox_id": "",
+        "max_attachment_size_mb": 25,
+        "imap_poll_interval_seconds": 60,
+        "ntfy_server_url": "https://ntfy.example.com",
+        "ntfy_topic_prefix": "oridesk",
+        "notify_aggregate_seconds": 60,
+        "mobile_public_base_url": "",
+    }
+    payload.update(overrides)
+    return payload
+
+
+def test_settings_saves_push_config(client, manager):
+    client.force_login(manager)
+    response = client.post(
+        reverse("routing:settings"),
+        _push_post(
+            ntfy_enabled="on",
+            ntfy_server_url="https://ntfy.example.com/",  # 尾斜杠应被去掉
+            ntfy_token="tk_phone_probe",
+            notify_aggregate_seconds=30,
+            mobile_public_base_url="https://desk.example.com",
+        ),
+    )
+    assert response.status_code == 302
+    from apps.notifications import ntfy
+
+    assert Setting.get_bool("ntfy_enabled") is True
+    assert Setting.get("ntfy_server_url") == "https://ntfy.example.com"
+    assert Setting.get_int("notify_aggregate_seconds") == 30
+    assert Setting.get("mobile_public_base_url") == "https://desk.example.com"
+    assert ntfy.get_token() == "tk_phone_probe"
+
+
+def test_ntfy_token_is_encrypted_at_rest(client, manager):
+    """决策 D4：令牌必须以 Fernet 密文入库，不能明文落 settings 表。"""
+    client.force_login(manager)
+    client.post(reverse("routing:settings"), _push_post(ntfy_token="tk_plaintext_probe"))
+    raw = Setting.get("ntfy_token")
+    assert raw
+    assert "tk_plaintext_probe" not in raw
+
+
+def test_blank_token_keeps_existing(client, manager):
+    """**关键防回归**：密码框回显不了原值，留空必须表示"不变"。
+
+    若按"空即清空"处理，管理员每次保存别的设置都会顺手把令牌清掉，
+    推送随即全线失效，且现象是"前几天还好好的"，极难定位。
+    """
+    from apps.notifications import ntfy
+
+    ntfy.set_token("tk_keep_me")
+    client.force_login(manager)
+    client.post(reverse("routing:settings"), _push_post(ntfy_token=""))
+    assert ntfy.get_token() == "tk_keep_me"
+
+
+def test_clear_checkbox_removes_token(client, manager):
+    from apps.notifications import ntfy
+
+    ntfy.set_token("tk_remove_me")
+    client.force_login(manager)
+    client.post(reverse("routing:settings"), _push_post(ntfy_token_clear="on"))
+    assert ntfy.get_token() == ""
+
+
+def test_legacy_post_does_not_touch_push_config(client, manager):
+    """表单没提交的键一律不动：兼容既有调用方，也避免误重置。"""
+    from apps.notifications import ntfy
+
+    Setting.set("ntfy_enabled", "true")
+    Setting.set("ntfy_server_url", "https://ntfy.example.com")
+    ntfy.set_token("tk_keep")
+
+    client.force_login(manager)
+    # 只提交原来那六项（模拟旧版页面 / 已有脚本）
+    client.post(
+        reverse("routing:settings"),
+        {
+            "sticky_window_days": 14,
+            "first_contact_window_hours": 48,
+            "fallback_group_id": "",
+            "fallback_mailbox_id": "",
+            "max_attachment_size_mb": 30,
+            "imap_poll_interval_seconds": 120,
+        },
+    )
+    assert Setting.get_bool("ntfy_enabled") is True
+    assert Setting.get("ntfy_server_url") == "https://ntfy.example.com"
+    assert ntfy.get_token() == "tk_keep"
+
+
+def test_ntfy_server_url_rejects_http(client, manager):
+    """http:// 会被硬拒绝，而不是给个警告就放行。
+
+    客户端 usesCleartextTraffic=false，明文 HTTP 的 ntfy 手机根本连不上；
+    放行只会制造"后端说发送成功、手机什么也收不到"这种最难查的故障。
+    """
+    client.force_login(manager)
+    response = client.post(
+        reverse("routing:settings"),
+        _push_post(ntfy_server_url="http://ntfy.example.com"),
+    )
+    assert response.status_code == 200
+    assert "ntfy_server_url" in response.context["form"].errors
+
+
+def test_topic_prefix_rejects_illegal_chars(client, manager):
+    client.force_login(manager)
+    response = client.post(
+        reverse("routing:settings"), _push_post(ntfy_topic_prefix="ori desk!")
+    )
+    assert response.status_code == 200
+    assert "ntfy_topic_prefix" in response.context["form"].errors
+
+
+def test_token_is_never_rendered(client, manager):
+    """令牌不回显（连密文也不该出现在页面源码里），只显示配置状态。"""
+    from apps.notifications import ntfy
+
+    ntfy.set_token("tk_must_not_render")
+    client.force_login(manager)
+    response = client.get(reverse("routing:settings"))
+    content = response.content.decode()
+    assert "tk_must_not_render" not in content
+    assert response.context["ntfy_token_set"] is True
+
+
+def test_settings_page_exposes_push_fields(client, manager):
+    """页面必须真的渲染出这些输入框 —— 这是"能配置"与"不能配置"的分界。"""
+    client.force_login(manager)
+    response = client.get(reverse("routing:settings"))
+    content = response.content.decode()
+    for field in (
+        "id_ntfy_enabled",
+        "id_ntfy_server_url",
+        "id_ntfy_token",
+        "id_ntfy_token_clear",
+        "id_ntfy_topic_prefix",
+        "id_notify_aggregate_seconds",
+        "id_mobile_public_base_url",
+    ):
+        assert field in content, f"设置页缺少 {field}"
+
+
 # ------------------------------------------------------------------ 邮箱总览
 def test_mailbox_overview_lists_kinds_and_sync_state(
     client, manager, unified_mailbox, tech_group, fallback_mailbox

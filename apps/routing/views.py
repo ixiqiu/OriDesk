@@ -199,6 +199,8 @@ def settings_edit(request):
         "first_contact_hours": Setting.get_int("first_contact_window_hours", 24),
         "max_attachment_mb": Setting.get_int("max_attachment_size_mb", 25),
         "imap_poll_seconds": Setting.get_int("imap_poll_interval_seconds", 60),
+        # 令牌**不回显**，只告诉管理员"配没配"。表单里那个密码框留空即保持不变。
+        "ntfy_token_set": bool(Setting.get("ntfy_token")),
     }
     return render(request, "routing/settings.html", context)
 
