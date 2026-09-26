@@ -87,6 +87,7 @@ MEDIA_ROOT=/srv/ticket-system/media
 STATIC_ROOT=/srv/ticket-system/staticfiles
 DJANGO_SECURE_SSL_REDIRECT=True
 ATTACHMENT_X_ACCEL_PREFIX=/media/attachments/    # 配合 Nginx internal，附件不外泄
+# 注意：不要设置 DJANGO_TESTING —— 它会关闭 HTTPS 跳转/​Secure Cookie/HSTS（deploy_check 会判 FAIL）
 ```
 
 ```bash
@@ -264,6 +265,8 @@ sudo -u oridesk .venv/bin/python manage.py collectstatic --noinput
 sudo -u oridesk .venv/bin/python manage.py deploy_check
 sudo systemctl restart oridesk-web oridesk-worker oridesk-scheduler
 ```
+
+升级到 v1.2.0 及以上会新增 `tags`/`ticket_tags` 表（`migrate` 会创建）；v1.3.0 起 `imap_ssl=False` 时 IMAP **强制 STARTTLS**（不支持则报错，不再明文登录）。完整对照见 `docs/部署手册.md` §6.5。
 
 回滚 = 切回上一个标签 + `systemctl restart`；**迁移不可逆**，涉及数据变更的版本要按
 `docs/部署手册.md` §6.3 用"升级前备份"恢复。

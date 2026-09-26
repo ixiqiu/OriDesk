@@ -24,6 +24,18 @@ from apps.routing.models import Template
 from tests.conftest import make_mailbox
 
 
+@pytest.fixture(autouse=True)
+def production_mode(monkeypatch):
+    """deploy_check 是给生产环境用的自检。
+
+    pytest 一加载就会让 `settings.UNDER_TEST=True`（此时安全开关会被测试模式关闭），
+    因此这些用例统一先切到"生产视角"，再由专门的用例单独验证测试模式会被拦住。
+    """
+    monkeypatch.setattr("django.conf.settings.UNDER_TEST", False)
+    monkeypatch.delenv("DJANGO_TESTING", raising=False)
+    return True
+
+
 def run(*args) -> str:
     out = StringIO()
     call_command("deploy_check", *args, stdout=out)
@@ -279,3 +291,112 @@ def test_fernet_import_error_is_reported(monkeypatch, db, ready_environment):
             run()
     except (CommandError, ImproperlyConfigured):
         pass  # 报错即可，测试目的是"不崩溃且给出结论"
+
+
+# ------------------------------------------------------------------ 测试模式防护
+def test_fails_when_testing_flag_in_environment(db, ready_environment, monkeypatch):
+    """DJANGO_TESTING=1 会让 settings 关闭 HTTPS 跳转/Secure Cookie/HSTS，生产必须拦住。"""
+    monkeypatch.setenv("DJANGO_TESTING", "1")
+    with pytest.raises(CommandError) as exc:
+        run()
+    assert "测试模式" in str(exc.value)
+
+
+def test_fails_when_under_test_is_active(db, ready_environment, monkeypatch):
+    monkeypatch.setattr("django.conf.settings.UNDER_TEST", True)
+    with pytest.raises(CommandError) as exc:
+        run()
+    assert "测试模式" in str(exc.value)
+
+
+def test_reports_not_in_test_mode(db, ready_environment, monkeypatch):
+    monkeypatch.delenv("DJANGO_TESTING", raising=False)
+    output = run()
+    assert "未处于测试模式" in output
+
+
+# ------------------------------------------------------------------ 未应用迁移（首次部署最常见场景）
+def test_reports_pending_migrations_with_readable_names(db, ready_environment, monkeypatch):
+    """回归：migration_plan() 的元素是 (Migration, backwards)，早期实现按元组解包会 TypeError。
+
+    这条路径只在"数据库里还有未应用的迁移"时才会走到——也就是首次部署、
+    或升级后忘记 migrate 的场景，恰恰是最不能被崩溃掩盖的。
+    """
+    from django.db.migrations.executor import MigrationExecutor
+    from django.db.migrations.loader import MigrationLoader
+
+    loader = MigrationLoader(connection)
+    first_key = sorted(loader.disk_migrations)[0]
+    migration = loader.disk_migrations[first_key]
+
+    monkeypatch.setattr(
+        MigrationExecutor, "migration_plan", lambda self, targets: [(migration, False)]
+    )
+    with pytest.raises(CommandError) as exc:
+        run()
+    message = str(exc.value)
+    assert "未应用的迁移" in message
+    assert f"{migration.app_label}.{migration.name}" in message
+
+
+def test_reports_many_pending_migrations(db, ready_environment, monkeypatch):
+    from django.db.migrations.executor import MigrationExecutor
+    from django.db.migrations.loader import MigrationLoader
+
+    loader = MigrationLoader(connection)
+    keys = sorted(loader.disk_migrations)[:7]
+    plan = [(loader.disk_migrations[k], False) for k in keys]
+    monkeypatch.setattr(MigrationExecutor, "migration_plan", lambda self, targets: plan)
+
+    with pytest.raises(CommandError) as exc:
+        run()
+    message = str(exc.value)
+    assert "存在 7 个未应用的迁移" in message
+    assert "等" in message  # 超过 5 个时给出省略提示
+
+
+# ------------------------------------------------------------------ 首次部署（空库）不能崩
+def test_pending_migrations_skip_db_checks_instead_of_crashing(db, ready_environment, monkeypatch):
+    """还没 migrate 时：报 FAIL 并跳过依赖表结构的检查，不能抛 traceback。"""
+    from django.db.migrations.executor import MigrationExecutor
+    from django.db.migrations.loader import MigrationLoader
+
+    loader = MigrationLoader(connection)
+    migration = loader.disk_migrations[sorted(loader.disk_migrations)[0]]
+    monkeypatch.setattr(
+        MigrationExecutor, "migration_plan", lambda self, targets: [(migration, False)]
+    )
+
+    with pytest.raises(CommandError) as exc:
+        run()
+    message = str(exc.value)
+    assert "未应用的迁移" in message
+
+    out = StringIO()
+    with pytest.raises(CommandError):
+        call_command("deploy_check", stdout=out)
+    output = out.getvalue()
+    assert "数据库结构尚未就绪" in output
+    assert "邮箱配置检查" in output
+    # 存储与队列检查不依赖表结构，仍然照常给出结论
+    assert "MEDIA_ROOT 可写" in output
+
+
+def test_database_error_inside_a_check_becomes_readable_failure(db, ready_environment, monkeypatch):
+    """表不存在等数据库异常要转成 FAIL/WARN，而不是把 traceback 抛给使用者。"""
+    from django.db import OperationalError
+
+    class _BoomManager:
+        def count(self):
+            raise OperationalError("no such table: mailboxes")
+
+        def filter(self, *args, **kwargs):
+            raise OperationalError("no such table: mailboxes")
+
+    monkeypatch.setattr(Mailbox, "objects", _BoomManager())
+    out = StringIO()
+    with pytest.raises(CommandError):
+        call_command("deploy_check", stdout=out)
+    output = out.getvalue()
+    assert "邮箱配置检查时数据库报错" in output
+    assert "no such table: mailboxes" in output

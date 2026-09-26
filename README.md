@@ -322,6 +322,7 @@ docker compose exec web sh -c 'DB_USER=root DB_PASSWORD="$DB_ROOT_PASSWORD" DB_N
 | `DJANGO_TIME_ZONE` | 否 | `Asia/Shanghai` | 默认 `Asia/Shanghai` |
 | `DJANGO_SECURE_SSL_REDIRECT` | 否 | `True` | 生产 `True`；本地无 HTTPS 时置 `False` |
 | `DJANGO_SECURE_HSTS_SECONDS` | 否 | `31536000` | 默认 1 年；首次上线建议先设 `300` 观察 |
+| `DJANGO_TESTING` | **禁止** | — | 仅测试用；设置后会自动关闭 HTTPS 跳转/Secure Cookie/HSTS，生产 `.env` 里出现会被 `deploy_check` 判 FAIL |
 | `DB_ENGINE` | 是 | `mysql` | `mysql`=MariaDB（生产）/ `sqlite`（本地） |
 | `DB_NAME` | 是 | `ticket_system` | 库名，需与 `MARIADB_DATABASE` 一致 |
 | `DB_USER` | 是 | `ticket` | 应用库账号 |

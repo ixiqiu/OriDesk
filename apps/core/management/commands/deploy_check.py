@@ -41,18 +41,50 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         self.results: list[tuple[str, str, str]] = []
+        self.db_connected = False   # 数据库能否连上
+        self.schema_current = False  # 表结构是否已就绪（迁移全部应用）
 
         self._check_django_settings()
+        self._check_test_mode()
         self._check_fernet()
         self._check_database()
         self._check_migrations()
-        self._check_mailboxes()
-        self._check_routing()
+        # 依赖表结构的检查：DB 不可用/迁移未应用时不能直接查库，
+        # 否则首次部署（还没 migrate）会以 traceback 结束而不是给出可读结论。
+        for check in (self._check_mailboxes, self._check_routing, self._check_autoresponder):
+            self._run_db_check(check)
         self._check_storage()
         self._check_queue()
-        self._check_autoresponder()
 
         return self._report(strict=options["strict"])
+
+    def _run_db_check(self, check) -> None:
+        """执行依赖数据库的检查，把数据库异常转成可读结论而不是崩溃。"""
+        from django.db import DatabaseError
+
+        if not self.schema_current:
+            self._record(
+                WARN,
+                f"跳过{self._skip_target(check)}：数据库结构尚未就绪",
+                "先执行 python manage.py migrate（容器内由 entrypoint 自动执行），再重跑 deploy_check",
+            )
+            return
+        try:
+            check()
+        except DatabaseError as exc:
+            self._record(
+                FAIL,
+                f"{self._skip_target(check)}时数据库报错：{exc}",
+                "确认数据库可用、迁移已应用后重跑",
+            )
+
+    @staticmethod
+    def _skip_target(check) -> str:
+        return {
+            "_check_mailboxes": "邮箱配置检查",
+            "_check_routing": "路由与用户组检查",
+            "_check_autoresponder": "自动回复模板检查",
+        }.get(getattr(check, "__name__", ""), "数据库检查")
 
     # ------------------------------------------------------------------ 各项检查
     def _record(self, level: str, title: str, hint: str = "") -> None:
@@ -86,6 +118,24 @@ class Command(BaseCommand):
             self._record(WARN, "SECURE_SSL_REDIRECT 已关闭", "确认由 Nginx 负责 HTTP→HTTPS 跳转")
         else:
             self._record(OK, "HTTPS 跳转已启用（或处于调试模式）")
+
+    def _check_test_mode(self) -> None:
+        """生产环境严禁处于"测试模式"。
+
+        `config/settings.py` 在 `UNDER_TEST`（pytest 已加载，或显式设置 `DJANGO_TESTING=1`）下会
+        主动关闭 `SECURE_SSL_REDIRECT` / Secure Cookie / HSTS——这是为了让单元测试能跑 http。
+        如果有人把 `DJANGO_TESTING=1` 带进生产 `.env`，安全开关会被**静默**关掉，
+        因此这里单独判 FAIL（DEBUG 检查发现不了它，因为 DEBUG 仍是 False）。
+        """
+        env_flag = (os.environ.get("DJANGO_TESTING", "") or "").strip().lower() in ("1", "true", "yes", "on")
+        if getattr(settings, "UNDER_TEST", False) or env_flag:
+            self._record(
+                FAIL,
+                "检测到测试模式（UNDER_TEST / DJANGO_TESTING）",
+                "该模式会关闭 HTTPS 强制跳转、Secure Cookie 与 HSTS；请从生产 .env 中删除 DJANGO_TESTING",
+            )
+        else:
+            self._record(OK, "未处于测试模式（生产安全开关正常生效）")
 
     def _check_fernet(self) -> None:
         key = getattr(settings, "FERNET_KEY", None)
@@ -122,6 +172,7 @@ class Command(BaseCommand):
         except Exception as exc:  # noqa: BLE001
             self._record(FAIL, f"数据库不可达：{exc}", "检查 DB_HOST/DB_USER/DB_PASSWORD 与网络")
             return
+        self.db_connected = True
         self._record(OK, f"数据库可连接（{engine.rsplit('.', 1)[-1]}）")
 
         if "mysql" in engine:
@@ -150,14 +201,25 @@ class Command(BaseCommand):
             self._record(WARN, f"无法检查迁移状态：{exc}", "确认数据库可用后重跑")
             return
         if plan:
-            names = ", ".join(f"{app}.{name}" for (app, name), _backwards in plan[:5])
+            # Django 的 migration_plan() 返回 [(Migration, backwards?), ...]；
+            # 这里对"元素是 Migration"与"元素是 (Migration, bool)"两种形态都兼容，
+            # 避免在"空库/首次部署"这个最需要该提示的场景里抛 TypeError。
+            names = ", ".join(self._migration_label(item) for item in plan[:5])
+            suffix = " 等" if len(plan) > 5 else ""
             self._record(
                 FAIL,
-                f"存在 {len(plan)} 个未应用的迁移：{names}",
+                f"存在 {len(plan)} 个未应用的迁移：{names}{suffix}",
                 "执行 python manage.py migrate（容器里由 entrypoint 自动执行）",
             )
         else:
+            self.schema_current = True
             self._record(OK, "数据库迁移已全部应用")
+
+    @staticmethod
+    def _migration_label(item) -> str:
+        """把 migration_plan() 的元素格式化成 `app.0001_xxx`。"""
+        migration = item[0] if isinstance(item, (tuple, list)) else item
+        return f"{migration.app_label}.{migration.name}"
 
     def _check_mailboxes(self) -> None:
         from apps.accounts.models import Mailbox
