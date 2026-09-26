@@ -161,7 +161,7 @@ def store_inbound_message(
 @transaction.atomic
 def add_note(ticket: Ticket, user, body_text: str, body_html: str = "") -> Message:
     """内部备注（§4.3 type=note）：组内可见，不对外发信，不影响待回复标签。"""
-    return Message.objects.create(
+    message = Message.objects.create(
         ticket=ticket,
         mailbox=ticket.mailbox,
         direction="out",
@@ -174,6 +174,26 @@ def add_note(ticket: Ticket, user, body_text: str, body_html: str = "") -> Messa
         actual_sender=user,
         sent_at=timezone.now(),
     )
+
+    # 移动端通知（契约 §4.4）：受众 = 被 @ 者 + 认领人。
+    # @ 解析基于纯文本，且**只推给本来就能看见这张工单的人**（权限校验在
+    # resolve_mentions 内，见 03-通知与推送设计.md §3）。
+    # 净化责任在调用方（views.create_note 里做 html_to_text(sanitize_html(...))），
+    # 本函数不做净化 —— 这是既有约定（02 §6），新调用方必须自己净化。
+    # 本函数带 @transaction.atomic，所以 enqueue_notify 会走 on_commit 推迟入队。
+    try:
+        from apps.notifications.audience import EVENT_NOTE_MENTIONED
+        from apps.notifications.mentions import resolve_mentions
+        from apps.notifications.tasks import enqueue_notify
+
+        mentioned = resolve_mentions(ticket, body_text, exclude_user=user)
+        enqueue_notify(
+            EVENT_NOTE_MENTIONED, ticket, actor=user, mentioned=mentioned
+        )
+    except Exception:  # noqa: BLE001 - 通知失败不影响备注落库
+        logger.exception("工单 T#%s 的备注通知派发失败。", ticket.pk)
+
+    return message
 
 
 # ------------------------------------------------------------------ 认领（§2.6）

@@ -10,7 +10,7 @@ from functools import wraps
 
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.http import Http404
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404
 
 from apps.tickets.models import Ticket
@@ -18,12 +18,40 @@ from apps.tickets.selectors import can_manage_routing, visible_tickets
 
 __all__ = [
     "login_required",
+    "api_login_required",
     "superadmin_required",
     "routing_manager_required",
     "mailbox_admin_required",
     "get_visible_ticket",
     "can_manage_routing",
 ]
+
+
+def api_login_required(view_func):
+    """移动端 API 的登录门（契约 §2.2，决策 D8）。
+
+    **为什么不能直接用 `login_required`**：Django 的 `login_required` 未登录时
+    **302 跳登录页**。对浏览器是对的，对 App 是灾难 —— 客户端会把一整页 HTML
+    当成 API 响应去解析，最终表现为「请求失败」这种最难定位的症状。
+
+    因此 API 一律返回 401 + 统一错误体，让 App 能明确区分「会话过期」并跳登录页。
+    """
+
+    @wraps(view_func)
+    def _wrapped(request, *args, **kwargs):
+        if not getattr(request.user, "is_authenticated", False):
+            return JsonResponse(
+                {
+                    "error": {
+                        "code": "unauthorized",
+                        "message": "登录状态已失效，请重新登录。",
+                    }
+                },
+                status=401,
+            )
+        return view_func(request, *args, **kwargs)
+
+    return _wrapped
 
 
 def superadmin_required(view_func):

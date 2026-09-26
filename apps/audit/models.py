@@ -78,6 +78,17 @@ class Setting(models.Model):
         "fallback_mailbox_id": "",
         "max_attachment_size_mb": "25",
         "imap_poll_interval_seconds": "60",
+        # 移动端推送（docs/移动端API约定.md §6.1）。
+        # ntfy_enabled 默认 "false"：未配置就不该发，避免装完就报错。
+        "ntfy_enabled": "false",
+        "ntfy_server_url": "",
+        # ntfy_token 存的是 **Fernet 密文**，不是明文（决策 D4）。
+        # 写入请走 apps.notifications.ntfy.set_token()，不要直接 Setting.set()。
+        "ntfy_token": "",
+        "ntfy_topic_prefix": "oridesk",
+        "notify_aggregate_seconds": "60",
+        # Click 用的外部地址；为空则省略 Click 头（决策 D3）。
+        "mobile_public_base_url": "",
     }
 
     class Meta:

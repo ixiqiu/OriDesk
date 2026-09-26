@@ -89,6 +89,7 @@ INSTALLED_APPS = [
     "apps.routing",
     "apps.autoresponder",
     "apps.audit",
+    "apps.notifications",
 ]
 
 try:  # RQ 队列（文档 §8：RQ + Redis）。缺少依赖时不阻断 Web 启动。
@@ -292,6 +293,11 @@ elif not DEBUG:
     CSRF_COOKIE_HTTPONLY = False  # HTMX 需要读取 csrftoken
     SESSION_COOKIE_SAMESITE = "Lax"
     CSRF_COOKIE_SAMESITE = "Lax"
+
+# CSRF 失败要区分 Web 与 API：API 返回机器可读的 JSON 错误体（App 据此决定
+# "重取 cookie 后重试一次"），Web 仍渲染 403 页。实现在 apps.core.views.csrf_failure。
+# 刻意放在条件块**之外**：测试环境必须与线上同一套行为，否则测的不是真实路径。
+CSRF_FAILURE_VIEW = "apps.core.views.csrf_failure"
 
 # Fernet 密钥（邮箱凭据加密，文档 §9.3）
 FERNET_KEY = env("FERNET_KEY")

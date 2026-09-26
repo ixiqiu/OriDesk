@@ -136,6 +136,28 @@ def process_inbound(mailbox: Mailbox, uid: int, raw_bytes: bytes, now=None) -> I
         except Exception:  # noqa: BLE001 - 自动回复失败不影响工单入库
             logger.exception("工单 T#%s 自动回复发送失败。", ticket.pk)
 
+    # 9. 移动端推送（契约 §4.4）—— 必须异步，且绝不能影响收信。
+    # 这是收信流水线的最后一步，位次即 `02-OriDesk后端侦察.md` §2.1 指明的钩子点
+    # （`return InboundResult(...)` 之前）。`enqueue_notify` 自身不抛异常，这里再包
+    # 一层是照抄本函数既有的防御风格（见上面 apply_rule_actions / 自动回复两处）：
+    # 通知失败绝不丢信。
+    # 位次也在 `with transaction.atomic()` 之外，所以入队时工单/消息都已提交。
+    # 入站邮件没有"动作发起人"（发件人是客户、不是系统用户），故 actor=None。
+    try:
+        from apps.notifications.audience import (
+            EVENT_TICKET_CREATED,
+            EVENT_TICKET_INBOUND,
+        )
+        from apps.notifications.tasks import enqueue_notify
+
+        enqueue_notify(
+            EVENT_TICKET_CREATED if created else EVENT_TICKET_INBOUND,
+            ticket,
+            subject=parsed.get("subject", ""),
+        )
+    except Exception:  # noqa: BLE001 - 通知失败不能影响收信
+        logger.exception("工单 T#%s 的通知派发失败。", ticket.pk)
+
     return InboundResult(
         status="processed",
         ticket=ticket,

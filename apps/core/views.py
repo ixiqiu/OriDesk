@@ -34,3 +34,29 @@ def not_found(request, exception=None):
 
 def server_error(request):
     return render(request, "errors/500.html", status=500)
+
+
+API_PATH_PREFIX = "/api/"
+
+
+def csrf_failure(request, reason=""):
+    """CSRF 校验失败的统一入口（契约 §2.2 / §3.0）。
+
+    Django 默认渲染 403 HTML 页。对浏览器没问题，但移动端 App 需要的是
+    `{"error": {"code": "csrf_failed"}}` 这样的**机器可读**响应 —— 否则 App
+    只能看到一坨 HTML，无法区分「CSRF 过期」与「真的没权限」，
+    而这两者的处理方式完全不同（前者重取 cookie 后重试一次，后者终止）。
+
+    Web 页面路径保持原样（渲染 403.html），不改既有行为。
+    """
+    if request.path.startswith(API_PATH_PREFIX):
+        return JsonResponse(
+            {
+                "error": {
+                    "code": "csrf_failed",
+                    "message": "CSRF 校验失败，请重新打开应用后重试。",
+                }
+            },
+            status=403,
+        )
+    return forbidden(request, reason)

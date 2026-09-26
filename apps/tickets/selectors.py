@@ -38,6 +38,30 @@ def can_manage_routing(user) -> bool:
     return bool(user.is_superadmin or user.is_admin_group_member or user.is_group_admin)
 
 
+def scope_counts(user) -> dict[str, int]:
+    """列表页 chips 上的计数（**实现逐字搬自 `views._scope_counts`**，决策 D5）。
+
+    口径必须与 `views.inbox()` 里各 scope 的过滤条件**逐字一致**，否则会出现
+    "chip 显示 3 条、点进去只有 2 条"这种自相矛盾的界面。
+
+    搬到 selectors 是因为**移动端角标端点也要用同一份口径**（`/api/mobile/badge/`）。
+    若在那边另写一套统计，就是在复制这个被注释警告过的 bug。`views._scope_counts`
+    现在只是转发到本函数，行为完全不变。
+    """
+    visible = visible_tickets(user)
+    return {
+        "all": visible.count(),
+        "mine": visible.filter(assignee=user).count(),
+        "unassigned": visible.filter(assignee__isnull=True).exclude(status="closed").count(),
+        # 与 inbox() 的 awaiting scope 口径一致（同样排除已关闭），否则 chips 上的数字
+        # 会和点进去的结果对不上
+        "awaiting": visible.filter(is_awaiting_reply=True)
+        .exclude(status="closed")
+        .filter(Q(assignee__isnull=True) | Q(assignee=user))
+        .count(),
+    }
+
+
 def pending_for_user(user) -> QuerySet[Ticket]:
     """当前用户的"待回复"队列（§2.6：认领后只有认领人看到待回复）。"""
     return (

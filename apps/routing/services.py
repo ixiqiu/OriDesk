@@ -212,6 +212,18 @@ def reassign_ticket(ticket: Ticket, target_group: Group, user, reason: str = "")
         target_group.name,
         getattr(user, "username", "-"),
     )
+
+    # 移动端通知（契约 §4.4）：受众是**新组**全体成员 —— 原组已经失去可见性，
+    # 推给它们是错的。此处 `ticket.group` 已指向新组，受众解析自然取新组。
+    # 包 try/except：通知失败不能影响改派这个业务动作（与 pipeline 的防御风格一致）。
+    try:
+        from apps.notifications.audience import EVENT_TICKET_REASSIGNED
+        from apps.notifications.tasks import enqueue_notify
+
+        enqueue_notify(EVENT_TICKET_REASSIGNED, ticket, actor=user)
+    except Exception:  # noqa: BLE001 - 通知失败不影响改派结果
+        logger.exception("工单 T#%s 的改派通知派发失败。", ticket.pk)
+
     return ticket
 
 

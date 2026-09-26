@@ -39,6 +39,7 @@ from apps.tickets.forms import (
     TicketTagForm,
 )
 from apps.tickets.models import MAX_TAGS_PER_TICKET, Attachment, Tag, Ticket
+from apps.tickets.selectors import scope_counts as selectors_scope_counts
 from apps.tickets.selectors import visible_tickets
 from apps.tickets.services import (
     add_note,
@@ -156,22 +157,11 @@ def inbox(request, scope: str = "all"):
 def _scope_counts(user) -> dict[str, int]:
     """列表页 chips 上的计数。
 
-    口径必须与 inbox() 里各 scope 的过滤条件**逐字一致**，否则会出现"chip 显示 3 条、
-    点进去只有 2 条"这种自相矛盾的界面。因此这里刻意重复那三段过滤条件，
-    而不是去复用别处的近似统计。
+    **实现已搬到 `selectors.scope_counts`（决策 D5）**，这里只做转发，行为不变。
+    搬家的原因：移动端角标端点也要用**同一份口径**，不能在那边另写一套统计。
+    保留本函数是为了不动既有渲染路径与测试。
     """
-    visible = visible_tickets(user)
-    return {
-        "all": visible.count(),
-        "mine": visible.filter(assignee=user).count(),
-        "unassigned": visible.filter(assignee__isnull=True).exclude(status="closed").count(),
-        # 与 inbox() 的 awaiting scope 口径一致（同样排除已关闭），否则 chips 上的数字
-        # 会和点进去的结果对不上
-        "awaiting": visible.filter(is_awaiting_reply=True)
-        .exclude(status="closed")
-        .filter(Q(assignee__isnull=True) | Q(assignee=user))
-        .count(),
-    }
+    return selectors_scope_counts(user)
 
 
 def _tag_filter_options(user):
