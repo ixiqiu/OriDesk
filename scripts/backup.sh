@@ -13,7 +13,7 @@
 #   BACKUP_DIR=./backups scripts/backup.sh             # 本地开发（SQLite）演练
 #
 # 环境变量（可写在 .env，也可命令行传入；命令行/已有环境变量优先）：
-#   APP_DIR=/data/dsh/home/OriDesk        项目目录（默认取脚本上一级）
+#   APP_DIR=/srv/ticket-system/app        项目目录（默认取脚本上一级）
 #   BACKUP_DIR=/srv/ticket-system/backups 备份输出目录（权限 700）
 #   BACKUP_RETENTION_DAYS=14              保留天数，按 mtime 清理 ticket-* 文件
 #   HOST_MEDIA_DIR=/srv/ticket-system/media
@@ -28,7 +28,7 @@
 #   ticket-<时间戳>.sha256               上述文件的校验和（restore.sh 恢复前会校验）
 #
 # 建议 crontab（每天 02:30；日志自行轮转）：
-#   30 2 * * * cd /data/dsh/home/OriDesk && ./scripts/backup.sh >> /var/log/oridesk-backup.log 2>&1
+#   30 2 * * * cd /srv/ticket-system/app && ./scripts/backup.sh >> /var/log/oridesk-backup.log 2>&1
 #
 # ⚠️ 安全与前提：
 #   1) 备份含客户邮件正文、附件等个人信息，BACKUP_DIR 必须限权（本脚本 umask 077 + chmod 700）

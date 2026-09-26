@@ -81,15 +81,13 @@
 本地开发不需要 MariaDB、Redis、Docker：`config/settings.py` 在 `DB_ENGINE=sqlite` 时自动使用 `db.sqlite3`，队列在 Redis 不可用时自动同步执行。
 
 ```bash
-cd /data/dsh/home/OriDesk
+git clone https://github.com/ixiqiu/OriDesk.git
+cd OriDesk
 
-# 1) 准备虚拟环境（本仓库已带 .venv，可跳过本步）
+# 1) 准备虚拟环境（本地已有 .venv 可跳过本步）
 python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements-dev.txt
-#    本工作区已用 uv 建好 .venv（里面没有 pip），用 uv 的等价写法：
-#      ./.toolchain/uv venv --python 3.12                                    # 从零创建
-#      ./.toolchain/uv pip install -r requirements-dev.txt --python .venv/bin/python
 
 # 2) 准备 .env（settings.py 会自己读取项目根目录的 .env，无需手动 export）
 cp .env.example .env
@@ -140,7 +138,8 @@ python manage.py deploy_check --strict   # WARN 也算失败，可放进上线�
 前提：宿主机已装 Docker + Compose v2，并已有 Nginx。完整步骤见 [docs/部署手册.md](docs/部署手册.md) §2，速览：
 
 ```bash
-cd /data/dsh/home/OriDesk
+git clone https://github.com/ixiqiu/OriDesk.git
+cd OriDesk
 
 # 1) 宿主机目录（容器内以 uid/gid 10001 运行，必须提前授权）
 sudo mkdir -p /srv/ticket-system/{media,staticfiles,backups}
@@ -268,7 +267,7 @@ OriDesk/
 
 | 目的 | 命令 |
 |---|---|
-| 立即备份 | `sudo /data/dsh/home/OriDesk/scripts/backup.sh` |
+| 立即备份 | `sudo ./scripts/backup.sh` |
 | 列出备份集 | `scripts/restore.sh --list` |
 | 从最新备份恢复 | `sudo scripts/restore.sh --latest --yes` |
 | 只恢复数据库 | `sudo scripts/restore.sh --latest --db-only --yes` |
