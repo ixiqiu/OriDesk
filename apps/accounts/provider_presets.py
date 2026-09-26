@@ -66,7 +66,7 @@ MAILBOX_PROVIDER_PRESETS: list[dict] = [
         "smtp_host": "smtp.163.com",
         "smtp_port": 465,
         "smtp_ssl": True,
-        "auth_hint": "在「设置 → POP3/SMTP/IMAP」开启服务并获取授权码；网易会校验 IMAP ID，若连接失败请优先用企业邮箱。",
+        "auth_hint": "在「设置 → POP3/SMTP/IMAP」开启服务并获取授权码；网易（Coremail）要求客户端发送 IMAP ID，系统已自动处理。",
     },
     {
         "key": "gmail",

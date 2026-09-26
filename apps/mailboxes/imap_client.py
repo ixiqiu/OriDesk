@@ -46,6 +46,42 @@ def starttls_supported(client) -> bool:
         return any(str(item).upper() == "STARTTLS" for item in capabilities or ())
 
 
+# 客户端标识：部分服务商（网易 163/126/yeah 个人邮箱所在的 Coremail 平台）
+# 要求第三方客户端在登录后按 RFC 2971 发送 ID 命令，否则后续 SELECT 会被拒绝：
+#   "select failed: SELECT Unsafe Login. Please contact kefu@188.com for help"
+# 这里声明本系统的身份；不声明身份的裸登录会被网易判定为"不安全登录"。
+CLIENT_ID_NAME = "OriDesk"
+CLIENT_ID_VERSION = "1.1"
+CLIENT_ID_VENDOR = "OriDesk"
+
+
+def send_client_id(client, mailbox) -> None:
+    """按 RFC 2971 发送 IMAP ID 客户端标识（服务商不要求时静默跳过）。
+
+    设计取向：**绝不因为这条命令影响连接本身**。
+    - 服务器未声明 `ID` 能力 → 直接跳过（imapclient 的 `id_()` 有
+      `@require_capability("ID")`，硬发会抛错）；
+    - 发送过程任何异常只记 warning，不影响已建立的登录会话。
+    """
+    try:
+        if not client.has_capability("ID"):
+            return
+    except Exception:  # noqa: BLE001 - 能力查询失败时按"不支持"处理（更保守）
+        return
+
+    try:
+        client.id_(
+            {
+                "name": CLIENT_ID_NAME,
+                "version": CLIENT_ID_VERSION,
+                "vendor": CLIENT_ID_VENDOR,
+            }
+        )
+        logger.info("IMAP %s 已发送客户端 ID 标识。", mailbox.imap_host)
+    except Exception as exc:  # noqa: BLE001 - ID 失败不应阻断连接
+        logger.warning("IMAP %s 发送 ID 失败（已忽略）：%s", mailbox.imap_host, exc)
+
+
 def connect_imap(mailbox, secret: str, *, timeout: int = 60):
     """建立**已登录**的 IMAP 连接，失败抛 `ImapConnectionError`。
 
@@ -83,6 +119,9 @@ def connect_imap(mailbox, secret: str, *, timeout: int = 60):
         raise ImapConnectionError(
             f"IMAP 登录失败（{mailbox.username}@{mailbox.imap_host}）：{exc}"
         ) from exc
+
+    # 登录成功后再声明客户端身份（网易等 Coremail 平台要求，否则 SELECT 会被拒）
+    send_client_id(client, mailbox)
     return client
 
 
