@@ -178,8 +178,64 @@ services:
         max-size: "10m"
         max-file: "5"
 
+  # ------------------------------------------------------------------ ntfy
+  # 移动端推送（决策 2 / docs/移动端API约定.md §7.2）。
+  # 后端用 stdlib urllib 向本服务发布；手机 App 用 /<topic>/json 长连接订阅。
+  #
+  # 版本刻意钉住：ntfy 的 topic/鉴权语义是推送链路的一部分，
+  # 用 latest 会在某次 docker compose pull 后静默改变行为。
+  ntfy:
+    image: binwiederhier/ntfy:v2.28.0
+    container_name: oridesk-ntfy
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    command: ["serve"]
+    environment:
+      # 必须与 Django 的 ntfy_server_url 设置项**一致**，否则 ntfy 生成的
+      # 自引用链接（附件、管理页）会指向错误地址。
+      NTFY_BASE_URL: ${NTFY_BASE_URL:-http://127.0.0.1:2586}
+      NTFY_LISTEN_HTTP: ":80"
+      # **必须为 true**（契约 §4.2.3）：不设时反代后面所有访客会被当成同一个
+      # IP 共用一个限流桶，几台手机就能互相把对方限流掉，且极难排查。
+      NTFY_BEHIND_PROXY: "true"
+      NTFY_CACHE_FILE: /var/lib/ntfy/cache.db
+      NTFY_AUTH_FILE: /var/lib/ntfy/user.db
+      # 默认 deny-all：未在 ACL 中显式放行的 topic 一律拒绝。
+      # 这是"topic 本身就是密码"之外的纵深防御。**首次部署后必须先建用户与令牌**
+      # 才能真正收发（见 docs/部署手册.md 的 ntfy 小节）：
+      #   docker compose exec ntfy ntfy user add --role=admin oridesk
+      #   docker compose exec ntfy ntfy token add --label=backend oridesk
+      # 若本实例只在局域网/VPN 内可达，可选放宽：
+      #   NTFY_AUTH_DEFAULT_ACCESS=read-write
+      NTFY_AUTH_DEFAULT_ACCESS: ${NTFY_AUTH_DEFAULT_ACCESS:-deny-all}
+      NTFY_ENABLE_LOGIN: "true"
+    volumes:
+      # 消息缓存（默认 12h）与鉴权库都在这里：**丢了这个卷，手机重连后
+      # 错过的通知就补不回来了**（"能补齐"是选 ntfy 的主要收益之一）。
+      - ntfy_data:/var/lib/ntfy
+    # 只对宿主机本机开放，外部流量必须经 Nginx（HTTPS）。
+    # 与 web 服务同一策略：不把内部端口直接暴露到公网。
+    ports:
+      - "127.0.0.1:${NTFY_PORT:-2586}:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:80/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
 volumes:
   # MariaDB 数据目录：备份请用 scripts/backup.sh 的逻辑备份，不要直接拷这个卷
   db_data:
   # Redis AOF 文件：仅承载队列/缓存，可不纳入备份
   redis_data:
+  # ntfy 消息缓存 + 鉴权库。缓存可重建（只是丢历史），但 **user.db 丢了
+  # 所有访问令牌都会失效**，需要重新签发并更新 Django 的 ntfy_token 设置项。
+  # 建议纳入备份。
+  ntfy_data:
