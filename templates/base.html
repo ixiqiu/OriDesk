@@ -16,7 +16,7 @@
 <body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
 {% load ui %}
 <div class="app-shell">
-  <aside class="sidebar">
+  <aside class="sidebar" id="app-sidebar">
     <div class="brand">{{ site_name }}</div>
     <div class="brand-sub">邮箱工单管理系统 v{{ app_version }}</div>
     <nav>
@@ -69,9 +69,13 @@
 
   <div class="main">
     <header class="topbar">
-      <div>
-        <h1 style="margin:0">{% block page_title %}收件箱{% endblock %}</h1>
-        {% block page_subtitle %}{% endblock %}
+      <div class="topbar-lead">
+        <button type="button" class="nav-toggle" id="nav-toggle"
+                aria-controls="app-sidebar" aria-expanded="false" aria-label="打开导航菜单"></button>
+        <div>
+          <h1 style="margin:0">{% block page_title %}收件箱{% endblock %}</h1>
+          {% block page_subtitle %}{% endblock %}
+        </div>
       </div>
       <div class="flex items-center gap-2">{% block page_actions %}{% endblock %}</div>
     </header>
@@ -80,8 +84,10 @@
       {% block content %}{% endblock %}
     </main>
   </div>
+  <div class="nav-backdrop" id="nav-backdrop" aria-hidden="true"></div>
 </div>
 <script src="{% static 'vendor/htmx.min.js' %}"></script>
+<script src="{% static 'js/nav.js' %}"></script>
 {% block extra_js %}{% endblock %}
 </body>
 </html>
