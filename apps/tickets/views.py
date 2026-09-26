@@ -142,9 +142,28 @@ def inbox(request, scope: str = "all"):
         "form": form,
         "groups": _selectable_groups(request.user),
         "tag_options": _tag_filter_options(request.user),
+        "scope_counts": _scope_counts(request.user),
     }
     template = "tickets/_inbox_table.html" if _is_htmx(request) else "tickets/inbox.html"
     return render(request, template, context)
+
+
+def _scope_counts(user) -> dict[str, int]:
+    """列表页 chips 上的计数。
+
+    口径必须与 inbox() 里各 scope 的过滤条件**逐字一致**，否则会出现"chip 显示 3 条、
+    点进去只有 2 条"这种自相矛盾的界面。因此这里刻意重复那三段过滤条件，
+    而不是去复用别处的近似统计。
+    """
+    visible = visible_tickets(user)
+    return {
+        "all": visible.count(),
+        "mine": visible.filter(assignee=user).count(),
+        "unassigned": visible.filter(assignee__isnull=True).exclude(status="closed").count(),
+        "awaiting": visible.filter(is_awaiting_reply=True)
+        .filter(Q(assignee__isnull=True) | Q(assignee=user))
+        .count(),
+    }
 
 
 def _tag_filter_options(user):

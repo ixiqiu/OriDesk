@@ -4,71 +4,98 @@
 {% block page_title %}
   {% if scope == 'mine' %}我的工单{% elif scope == 'unassigned' %}待认领工单{% elif scope == 'awaiting' %}待回复工单{% else %}收件箱{% endif %}
 {% endblock %}
-{% block page_actions %}
-  <a class="btn" href="{% url 'tickets:awaiting' %}">待回复 {{ nav_awaiting_total }}</a>
-  <a class="btn" href="{% url 'tickets:unassigned' %}">待认领 {{ unassigned_count }}</a>
-{% endblock %}
 
 {% block content %}
-<div class="card mb-4">
-  <form method="get" class="card-body flex flex-wrap items-end gap-3" id="inbox-filter"
-        hx-get="{{ request.path }}" hx-target="#inbox-table" hx-select="#inbox-table" hx-swap="outerHTML"
-        hx-push-url="true" hx-trigger="change, submit">
-    <div style="min-width:220px">
-      <label for="id_q">搜索</label>
-      <input type="text" name="q" id="id_q" value="{{ filters.q }}" placeholder="主题 / 客户邮箱 / 正文">
+
+{# 搜索常驻 + 常用筛选 chips；其余筛选条件收进底部弹层（窄屏不再占首屏 300px） #}
+<form method="get" id="inbox-filter" class="list-toolbar"
+      hx-get="{{ request.path }}" hx-target="#inbox-table" hx-select="#inbox-table" hx-swap="outerHTML"
+      hx-push-url="true">
+
+  <label class="list-search">
+    <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="11" cy="11" r="6"/><path d="M15.5 15.5 20 20"/></svg>
+    <input type="text" name="q" id="id_q" value="{{ filters.q }}" placeholder="搜索主题 / 客户邮箱 / 正文">
+  </label>
+
+  <div class="chips">
+    <a class="chip {% if scope == 'all' %}chip-active{% endif %}" href="{% url 'tickets:inbox' %}">全部 <span>{{ scope_counts.all }}</span></a>
+    <a class="chip {% if scope == 'awaiting' %}chip-active{% endif %}" href="{% url 'tickets:awaiting' %}">待回复 <span>{{ scope_counts.awaiting }}</span></a>
+    <a class="chip {% if scope == 'unassigned' %}chip-active{% endif %}" href="{% url 'tickets:unassigned' %}">未认领 <span>{{ scope_counts.unassigned }}</span></a>
+    <a class="chip {% if scope == 'mine' %}chip-active{% endif %}" href="{% url 'tickets:mine' %}">我的 <span>{{ scope_counts.mine }}</span></a>
+  </div>
+
+  <button type="button" class="btn btn-sm" data-sheet-open="filter-sheet">
+    <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+    筛选
+  </button>
+
+  <span class="list-count">
+    共 {{ page_obj.paginator.count }} 条
+    {% if filters.group or filters.status or filters.awaiting or filters.assignee or filters.tag or filters.q %}· 已筛选{% endif %}
+  </span>
+
+  {# 其余筛选条件：窄屏从底部弹出，宽屏居中成对话框。放在 form 内，提交时才带得上。 #}
+  <dialog class="sheet-dialog" id="filter-sheet">
+    <div class="sheet">
+      <div class="sheet-grip"></div>
+      <div class="sheet-head">
+        <h2>筛选</h2>
+        <button type="button" class="iconbtn" data-sheet-close aria-label="关闭">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+      <div class="sheet-body">
+        <div class="field">
+          <label for="id_group">用户组</label>
+          <select name="group" id="id_group">
+            <option value="">全部可见组</option>
+            {% for group in groups %}
+              <option value="{{ group.pk }}" {% if filters.group|stringformat:'s' == group.pk|stringformat:'s' %}selected{% endif %}>{{ group.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="id_status">状态</label>
+          <select name="status" id="id_status">
+            <option value="">全部状态</option>
+            <option value="open" {% if filters.status == 'open' %}selected{% endif %}>进行中</option>
+            <option value="pending" {% if filters.status == 'pending' %}selected{% endif %}>等待客户</option>
+            <option value="closed" {% if filters.status == 'closed' %}selected{% endif %}>已关闭</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="id_awaiting">待回复</label>
+          <select name="awaiting" id="id_awaiting">
+            <option value="">全部</option>
+            <option value="1" {% if filters.awaiting == '1' %}selected{% endif %}>仅待回复</option>
+            <option value="0" {% if filters.awaiting == '0' %}selected{% endif %}>不含待回复</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="id_assignee">认领人</label>
+          <select name="assignee" id="id_assignee">
+            <option value="">全部</option>
+            <option value="me" {% if filters.assignee == 'me' %}selected{% endif %}>我认领的</option>
+            <option value="none" {% if filters.assignee == 'none' %}selected{% endif %}>未认领</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="id_tag">标签</label>
+          <select name="tag" id="id_tag">
+            <option value="">全部标签</option>
+            {% for tag in tag_options %}
+              <option value="{{ tag.pk }}" {% if filters.tag|stringformat:'s' == tag.pk|stringformat:'s' %}selected{% endif %}>{{ tag.name }}{% if tag.group %}（{{ tag.group.name }}）{% endif %}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="sheet-foot">
+        <a class="btn" href="{{ request.path }}" style="flex:0 0 96px">重置</a>
+        <button class="btn btn-primary" type="submit" style="flex:1">查看结果</button>
+      </div>
     </div>
-    <div style="min-width:160px">
-      <label for="id_group">用户组</label>
-      <select name="group" id="id_group">
-        <option value="">全部可见组</option>
-        {% for group in groups %}
-          <option value="{{ group.pk }}" {% if filters.group|stringformat:'s' == group.pk|stringformat:'s' %}selected{% endif %}>{{ group.name }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div style="min-width:140px">
-      <label for="id_status">状态</label>
-      <select name="status" id="id_status">
-        <option value="">全部状态</option>
-        <option value="open" {% if filters.status == 'open' %}selected{% endif %}>进行中</option>
-        <option value="pending" {% if filters.status == 'pending' %}selected{% endif %}>等待客户</option>
-        <option value="closed" {% if filters.status == 'closed' %}selected{% endif %}>已关闭</option>
-      </select>
-    </div>
-    <div style="min-width:140px">
-      <label for="id_awaiting">待回复</label>
-      <select name="awaiting" id="id_awaiting">
-        <option value="">全部</option>
-        <option value="1" {% if filters.awaiting == '1' %}selected{% endif %}>仅待回复</option>
-        <option value="0" {% if filters.awaiting == '0' %}selected{% endif %}>不含待回复</option>
-      </select>
-    </div>
-    <div style="min-width:140px">
-      <label for="id_assignee">认领人</label>
-      <select name="assignee" id="id_assignee">
-        <option value="">全部</option>
-        <option value="me" {% if filters.assignee == 'me' %}selected{% endif %}>我认领的</option>
-        <option value="none" {% if filters.assignee == 'none' %}selected{% endif %}>未认领</option>
-      </select>
-    </div>
-    <div style="min-width:170px">
-      <label for="id_tag">标签</label>
-      <select name="tag" id="id_tag">
-        <option value="">全部标签</option>
-        {% for tag in tag_options %}
-          <option value="{{ tag.pk }}" {% if filters.tag|stringformat:'s' == tag.pk|stringformat:'s' %}selected{% endif %}>
-            {{ tag.name }}{% if tag.group %}（{{ tag.group.name }}）{% endif %}
-          </option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="flex gap-2">
-      <button class="btn btn-primary" type="submit">筛选</button>
-      <a class="btn" href="{{ request.path }}">重置</a>
-    </div>
-  </form>
-</div>
+  </dialog>
+</form>
 
 {% include "tickets/_inbox_table.html" %}
 {% endblock %}

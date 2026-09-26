@@ -249,19 +249,41 @@ hr { border: 0; border-top: 1px solid var(--color-border); margin: 1rem 0; }
 .chip:hover { background: var(--color-surface-2); text-decoration: none; }
 .chip-active { background: var(--color-text); border-color: var(--color-text); color: #fff; }
 
-/* ---------- 弹层（筛选 / 回复等） ---------- */
-.scrim { position: fixed; inset: 0; z-index: 40; background: rgba(17, 24, 39, .45); }
+/* ---------- 列表工具条：搜索 + 常用筛选 chips + 筛选入口 ---------- */
+.list-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.list-search {
+  display: flex; align-items: center; gap: 8px; flex: 0 1 320px; min-width: 200px;
+  height: 36px; padding: 0 12px; background: var(--color-surface);
+  border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); color: var(--color-muted);
+}
+.list-search input { border: 0; min-height: 0; height: auto; padding: 0; background: transparent; }
+.list-search input:focus { outline: 0; }
+.list-search:focus-within { border-color: var(--color-primary); box-shadow: 0 0 0 3px #e4ecff; }
+.list-count { color: var(--color-muted); font-size: .78rem; margin-left: auto; }
+
+/* ---------- 底部弹层：原生 <dialog> 模态 ----------
+   用 dialog 而不是自己写遮罩：遮罩、Esc 关闭、焦点陷阱、惰性化背景都由浏览器负责。
+   _mockup 设计稿里的那版是纯静态演示，落地用这个更稳。 */
+.sheet-dialog {
+  border: 0; padding: 0; background: transparent;
+  width: 100%; max-width: 100%; margin: auto auto 0; max-height: 92vh;
+}
+.sheet-dialog::backdrop { background: rgba(17, 24, 39, .45); }
 .sheet {
-  position: fixed; z-index: 50; left: 0; right: 0; bottom: 0;
   background: var(--color-surface); border-radius: 18px 18px 0 0;
   box-shadow: 0 -10px 30px rgba(16, 24, 40, .18);
-  max-height: 88%; display: flex; flex-direction: column;
+  display: flex; flex-direction: column; max-height: 92vh;
 }
 .sheet-grip { width: 36px; height: 4px; border-radius: 2px; background: var(--color-border-strong); margin: 10px auto 2px; }
 .sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 16px; }
 .sheet-head h2 { margin: 0; font-size: 1rem; }
 .sheet-body { padding: 0 16px 16px; overflow: auto; display: flex; flex-direction: column; gap: 14px; }
 .sheet-foot { display: flex; gap: 12px; padding: 12px 16px calc(16px + env(safe-area-inset-bottom)); border-top: 1px solid var(--color-border); }
+/* 宽屏：弹层居中成对话框，而不是贴着底部 */
+@media (min-width: 901px) {
+  .sheet-dialog { max-width: 520px; margin: auto; }
+  .sheet { border-radius: var(--radius-lg); }
+}
 
 /* ---------- 消息表单 / 提示条 ---------- */
 .form-row { margin-bottom: 12px; }
@@ -384,20 +406,35 @@ input[type=file] { padding: 5px 8px; }
     display: block; position: fixed; inset: 0; z-index: 50; background: rgba(15, 23, 42, .5);
   }
 
-  /* 表格 → 卡片流（不改模板，用 CSS 把 table 行摊成卡片） */
-  .table.table-cards, .table-responsive { display: block; }
-  .table-cards thead { display: none; }
-  .table-cards tbody, .table-cards tr, .table-cards td { display: block; width: auto; }
-  .table-cards tr {
+  /* 行列表 → 卡片流（同一份 DOM，窄屏把 grid 行摊成卡片） */
+  .rows { border: 0; background: transparent; box-shadow: none; border-radius: 0; }
+  .rows-head { display: none; }
+  .row {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px;
+    min-height: 0; padding: 12px 14px; margin-bottom: 8px; position: relative;
     background: var(--color-surface); border: 1px solid var(--color-border);
     border-radius: var(--radius); box-shadow: var(--shadow-sm);
-    margin-bottom: 8px; padding: 12px 14px; position: relative;
   }
-  .table-cards td { border: 0; padding: 2px 0; text-align: left; }
-  .table-cards td[data-label]::before { content: attr(data-label); color: var(--color-muted); font-size: .75rem; margin-right: 6px; }
+  .row:last-child { border-bottom: 1px solid var(--color-border); }
+  .row > span:nth-child(1) { position: absolute; left: 0; top: 12px; bottom: 12px; height: auto; }
+  /* 三行：① 主题（允许换行，不截断） ② 状态徽标 + 时间 ③ 归属与认领 */
+  .row > span:nth-child(2) { flex: 1 1 100%; min-width: 0; order: 1; }
+  .row > span:nth-child(4) { flex: 0 0 auto; order: 2; }
+  .row > span:nth-child(5) { margin-left: auto; order: 3; font-size: .75rem; }
+  .row > span:nth-child(3) { flex: 1 1 100%; order: 4; font-size: .75rem; }
+  .row .row-subject, .row .row-sub { white-space: normal; overflow: visible; text-overflow: clip; }
 
-  /* 弹层在窄屏铺满底部 */
-  .sheet { border-radius: 18px 18px 0 0; }
+  /* 工具条：搜索行铺满，chips 横滑 */
+  .list-toolbar { gap: 8px; }
+  .list-search { flex: 1 1 100%; }
+  .chips { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip { flex: 0 0 auto; }
+  .list-count { display: none; }
+
+  /* 表格页（其它管理页）在窄屏也允许横向滑动，避免整页被撑破 */
+  .table-responsive { display: block; overflow-x: auto; }
+  .table-responsive .table { min-width: 640px; }
 
   @media (prefers-reduced-motion: reduce) {
     .rail { transition: none; }
@@ -422,7 +459,7 @@ input[type=file] { padding: 5px 8px; }
 .text-muted { color: var(--color-muted); } .text-danger { color: var(--color-danger); }
 .text-success { color: var(--color-success); } .text-warning { color: var(--color-warning); }
 .text-center { text-align: center; } .text-right { text-align: right; }
-.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.truncate, .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .w-full { width: 100%; } .w-1\/2 { width: 50%; } .w-1\/3 { width: 33.333%; } .w-2\/3 { width: 66.666%; }
 .rounded { border-radius: var(--radius-sm); } .rounded-lg { border-radius: var(--radius); }
 .border { border: 1px solid var(--color-border); } .border-t { border-top: 1px solid var(--color-border); }
