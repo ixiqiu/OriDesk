@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% load static ui %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'vendor/quill.snow.css' %}">{% endblock %}
 {% block title %}T#{{ ticket.pk }} · {{ ticket.subject|truncatechars:40 }}{% endblock %}
 {% block page_title %}[T#{{ ticket.pk }}] {{ ticket.subject|truncatechars:60 }}{% endblock %}
 {% block page_subtitle %}

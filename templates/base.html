@@ -4,6 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}{{ site_name }}{% endblock %}</title>
+  {# 页面级样式：必须排在 app.css **之前**，第三方主题（如 Quill）自带的边框等比 app.css 的
+     同权重覆盖规则优先级低，放在后面会把 app.css 的去边框设计盖掉。 #}
+  {% block extra_css %}{% endblock %}
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
   {% block extra_head %}{% endblock %}
 </head>
