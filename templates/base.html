@@ -4,8 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}{{ site_name }}{% endblock %}</title>
-  {# 页面级样式：必须排在 app.css **之前**，第三方主题（如 Quill）自带的边框等比 app.css 的
-     同权重覆盖规则优先级低，放在后面会把 app.css 的去边框设计盖掉。 #}
+  {% comment %}
+    页面级样式必须排在 app.css 之前：第三方主题（如 Quill）自带的边框与 app.css 的
+    去边框规则同权重，后加载者获胜，放在后面会把 app.css 的设计盖掉。
+    注意 Django 的 {# #} 注释不支持跨行，多行注释必须写成 comment 标签。
+  {% endcomment %}
   {% block extra_css %}{% endblock %}
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
   {% block extra_head %}{% endblock %}
