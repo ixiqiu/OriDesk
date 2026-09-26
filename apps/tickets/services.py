@@ -220,7 +220,14 @@ def set_status(ticket: Ticket, status: str, user=None) -> Ticket:
         return ticket
     previous = ticket.status
     ticket.status = status
-    ticket.save(update_fields=["status", "updated_at"])
+    fields = ["status", "updated_at"]
+    if status == "closed" and ticket.is_awaiting_reply:
+        # 关闭即不再"待回复"：该标签的语义是"等客户回信"（§5.5），工单关闭后不成立。
+        # 不清掉的话，这条标记会残留在「待回复」清单与角标计数里 —— 已关闭的工单
+        # 却出现在待回复队列中，用户看到的就是"关了还在催"。
+        ticket.is_awaiting_reply = False
+        fields.append("is_awaiting_reply")
+    ticket.save(update_fields=fields)
     audit(
         action="config_change",
         user=user,

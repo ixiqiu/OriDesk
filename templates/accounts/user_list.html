@@ -34,40 +34,42 @@
 
 <div class="card">
   {% if users %}
+  <div class="table-responsive">
   <table class="table">
-    <thead>
-      <tr>
-        <th>用户名</th>
-        <th>姓名</th>
-        <th>邮箱</th>
-        <th>超级管理员</th>
-        <th>所属组</th>
-        <th>状态</th>
-        <th>操作</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for row in users %}
-      <tr>
-        <td><a href="{% url 'accounts:user_edit' row.pk %}">{{ row.username }}</a></td>
-        <td>{{ row.get_full_name|default:"—" }}</td>
-        <td>{{ row.email|default:"—" }}</td>
-        <td>{% if row.is_superadmin %}<span class="badge badge-open">是</span>{% else %}<span class="text-muted">否</span>{% endif %}</td>
-        <td>
-          {% for membership in row.user_groups.all %}
-            <span class="badge {% if membership.is_admin %}badge-claimed{% else %}badge-closed{% endif %}">
-              {{ membership.group.name }}{% if membership.is_admin %} · 组内管理员{% endif %}
-            </span>
-          {% empty %}
-            <span class="text-muted">未分组</span>
-          {% endfor %}
-        </td>
-        <td>{% if row.is_active %}<span class="badge badge-claimed">启用</span>{% else %}<span class="badge badge-danger">停用</span>{% endif %}</td>
-        <td><a class="btn btn-sm" href="{% url 'accounts:user_edit' row.pk %}">编辑</a></td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+      <thead>
+        <tr>
+          <th>用户名</th>
+          <th>姓名</th>
+          <th>邮箱</th>
+          <th>超级管理员</th>
+          <th>所属组</th>
+          <th>状态</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in users %}
+        <tr>
+          <td><a href="{% url 'accounts:user_edit' row.pk %}">{{ row.username }}</a></td>
+          <td>{{ row.get_full_name|default:"—" }}</td>
+          <td>{{ row.email|default:"—" }}</td>
+          <td>{% if row.is_superadmin %}<span class="badge badge-open">是</span>{% else %}<span class="text-muted">否</span>{% endif %}</td>
+          <td>
+            {% for membership in row.user_groups.all %}
+              <span class="badge {% if membership.is_admin %}badge-claimed{% else %}badge-closed{% endif %}">
+                {{ membership.group.name }}{% if membership.is_admin %} · 组内管理员{% endif %}
+              </span>
+            {% empty %}
+              <span class="text-muted">未分组</span>
+            {% endfor %}
+          </td>
+          <td>{% if row.is_active %}<span class="badge badge-claimed">启用</span>{% else %}<span class="badge badge-danger">停用</span>{% endif %}</td>
+          <td><a class="btn btn-sm" href="{% url 'accounts:user_edit' row.pk %}">编辑</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
   {% else %}
   <div class="empty">没有符合条件的用户。</div>
   {% endif %}

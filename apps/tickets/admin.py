@@ -88,7 +88,8 @@ class TicketAdmin(admin.ModelAdmin):
 
     @admin.action(description="标记为待回复")
     def action_mark_awaiting(self, request, queryset):
-        updated = queryset.update(is_awaiting_reply=True)
+        # 已关闭工单跳过：待回复对关闭工单无意义，标了也不会进队列（见 selectors）
+        updated = queryset.exclude(status="closed").update(is_awaiting_reply=True)
         self.message_user(request, f"已标记 {updated} 个工单为待回复。", messages.SUCCESS)
 
     @admin.action(description="关闭工单")

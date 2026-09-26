@@ -146,7 +146,7 @@ class Ticket(models.Model):
     @property
     def pending_label(self) -> str:
         """组内协作提示（§2.6）：认领后只有认领人看到"待回复"。"""
-        if not self.is_awaiting_reply:
+        if not self.is_awaiting_reply or self.status == "closed":
             return ""
         if self.assignee_id:
             return "待回复（认领人）"

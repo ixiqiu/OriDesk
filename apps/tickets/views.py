@@ -67,8 +67,10 @@ def inbox(request, scope: str = "all"):
     elif scope == "unassigned":
         queryset = queryset.filter(assignee__isnull=True).exclude(status="closed")
     elif scope == "awaiting":
-        queryset = queryset.filter(is_awaiting_reply=True).filter(
-            Q(assignee__isnull=True) | Q(assignee=request.user)
+        queryset = (
+            queryset.filter(is_awaiting_reply=True)
+            .exclude(status="closed")
+            .filter(Q(assignee__isnull=True) | Q(assignee=request.user))
         )
 
     form = InboxFilterForm(request.GET or None)
@@ -114,7 +116,10 @@ def inbox(request, scope: str = "all"):
     if filters["status"]:
         queryset = queryset.filter(status=filters["status"])
     if filters["awaiting"] in ("0", "1"):
-        queryset = queryset.filter(is_awaiting_reply=filters["awaiting"] == "1")
+        if filters["awaiting"] == "1":
+            queryset = queryset.filter(is_awaiting_reply=True).exclude(status="closed")
+        else:
+            queryset = queryset.filter(is_awaiting_reply=False)
     if filters["assignee"]:
         if filters["assignee"] == "me":
             queryset = queryset.filter(assignee=request.user)
@@ -160,7 +165,10 @@ def _scope_counts(user) -> dict[str, int]:
         "all": visible.count(),
         "mine": visible.filter(assignee=user).count(),
         "unassigned": visible.filter(assignee__isnull=True).exclude(status="closed").count(),
+        # 与 inbox() 的 awaiting scope 口径一致（同样排除已关闭），否则 chips 上的数字
+        # 会和点进去的结果对不上
         "awaiting": visible.filter(is_awaiting_reply=True)
+        .exclude(status="closed")
         .filter(Q(assignee__isnull=True) | Q(assignee=user))
         .count(),
     }

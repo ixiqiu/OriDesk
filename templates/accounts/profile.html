@@ -40,25 +40,27 @@
     </div>
     <div class="card-body">
       {% if memberships %}
-      <table class="table">
-        <thead>
-          <tr><th>用户组</th><th>组内身份</th><th>对外身份邮箱</th></tr>
-        </thead>
-        <tbody>
-          {% for membership in memberships %}
-          <tr>
-            <td>
-              {{ membership.group.name }}
-              {% if membership.group.is_admin_group %}<span class="badge badge-open">管理员组</span>{% endif %}
-            </td>
-            <td>
-              {% if membership.is_admin %}<span class="badge badge-claimed">组内管理员</span>{% else %}<span class="text-muted">普通成员</span>{% endif %}
-            </td>
-            <td>{{ membership.group.identity_email|default:"—（无可用邮箱）" }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+      <div class="table-responsive">
+  <table class="table">
+          <thead>
+            <tr><th>用户组</th><th>组内身份</th><th>对外身份邮箱</th></tr>
+          </thead>
+          <tbody>
+            {% for membership in memberships %}
+            <tr>
+              <td>
+                {{ membership.group.name }}
+                {% if membership.group.is_admin_group %}<span class="badge badge-open">管理员组</span>{% endif %}
+              </td>
+              <td>
+                {% if membership.is_admin %}<span class="badge badge-claimed">组内管理员</span>{% else %}<span class="text-muted">普通成员</span>{% endif %}
+              </td>
+              <td>{{ membership.group.identity_email|default:"—（无可用邮箱）" }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
       {% else %}
       <div class="empty">你还没有加入任何用户组，请联系超级管理员分配。</div>
       {% endif %}

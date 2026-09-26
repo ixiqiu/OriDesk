@@ -44,48 +44,50 @@
     <span class="text-muted text-xs">已配置专属模板的组：{{ group_template_count }} 个</span>
   </div>
   <div class="overflow-auto">
-    <table class="table">
-      <thead>
-        <tr>
-          <th>用户组</th>
-          <th>模板来源</th>
-          <th>对外身份</th>
-          <th>更新时间</th>
-          <th>操作</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in rows %}
-        <tr>
-          <td>{{ row.group.name }}</td>
-          <td>
-            {% if row.template %}
-              <span class="badge badge-open">该组使用专属模板</span>
-            {% else %}
-              <span class="badge badge-closed">使用全局模板</span>
-            {% endif %}
-          </td>
-          <td>{{ row.group.identity_email|default:"—" }}</td>
-          <td class="text-muted text-xs">{% if row.template %}{{ row.template.updated_at|date:"Y-m-d H:i" }}{% else %}—{% endif %}</td>
-          <td>
-            <div class="flex gap-2">
-              <a class="btn btn-sm" href="{% url 'autoresponder:group_template_edit' row.group.pk %}">
-                {% if row.template %}编辑专属模板{% else %}创建专属模板{% endif %}
-              </a>
+    <div class="table-responsive">
+  <table class="table">
+        <thead>
+          <tr>
+            <th>用户组</th>
+            <th>模板来源</th>
+            <th>对外身份</th>
+            <th>更新时间</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td>{{ row.group.name }}</td>
+            <td>
               {% if row.template %}
-              <form method="post" action="{% url 'autoresponder:group_template_delete' row.group.pk %}"
-                    onsubmit="return confirm('确定删除该组的专属模板？删除后该组将回落到全局模板。');">{% csrf_token %}
-                <button class="btn btn-sm btn-danger" type="submit">删除</button>
-              </form>
+                <span class="badge badge-open">该组使用专属模板</span>
+              {% else %}
+                <span class="badge badge-closed">使用全局模板</span>
               {% endif %}
-            </div>
-          </td>
-        </tr>
-        {% empty %}
-        <tr><td colspan="5" class="empty">尚未创建任何用户组。</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+            </td>
+            <td>{{ row.group.identity_email|default:"—" }}</td>
+            <td class="text-muted text-xs">{% if row.template %}{{ row.template.updated_at|date:"Y-m-d H:i" }}{% else %}—{% endif %}</td>
+            <td>
+              <div class="flex gap-2">
+                <a class="btn btn-sm" href="{% url 'autoresponder:group_template_edit' row.group.pk %}">
+                  {% if row.template %}编辑专属模板{% else %}创建专属模板{% endif %}
+                </a>
+                {% if row.template %}
+                <form method="post" action="{% url 'autoresponder:group_template_delete' row.group.pk %}"
+                      onsubmit="return confirm('确定删除该组的专属模板？删除后该组将回落到全局模板。');">{% csrf_token %}
+                  <button class="btn btn-sm btn-danger" type="submit">删除</button>
+                </form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="5" class="empty">尚未创建任何用户组。</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 

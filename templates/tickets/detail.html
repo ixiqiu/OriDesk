@@ -24,7 +24,7 @@
 
 {% block content %}
 <div class="flex gap-4 items-start flex-wrap">
-  <div style="flex:1 1 620px; min-width:320px">
+  <div class="detail-main">
     {% include "tickets/_timeline.html" %}
 
     <div class="card mt-4">
@@ -70,7 +70,7 @@
     </div>
   </div>
 
-  <aside style="flex:0 1 320px; min-width:280px">
+  <aside class="detail-side">
     <div class="card">
       <div class="card-header">
         <h2 style="margin:0">标签</h2>
@@ -152,7 +152,7 @@
         <div class="flex justify-between py-2 border-b"><span class="text-muted">归一化主题</span><span>{{ ticket.normalized_subject|default:"—" }}</span></div>
         <div class="flex justify-between py-2 border-b"><span class="text-muted">创建时间</span><span>{{ ticket.created_at|date:"Y-m-d H:i" }}</span></div>
         <div class="flex justify-between py-2 border-b"><span class="text-muted">最后消息</span><span>{{ ticket.last_message_at|date:"Y-m-d H:i" }}</span></div>
-        <div class="flex justify-between py-2"><span class="text-muted">待回复</span><span>{{ ticket.is_awaiting_reply|yesno:"是,否" }}</span></div>
+        <div class="flex justify-between py-2"><span class="text-muted">待回复</span><span>{% if ticket.status == 'closed' %}—{% else %}{{ ticket.is_awaiting_reply|yesno:"是,否" }}{% endif %}</span></div>
       </div>
     </div>
 
@@ -180,6 +180,11 @@
       </div>
     </div>
   </aside>
+</div>
+
+{# 窄屏：把最常用的动作固定在底部（sticky 在底部 Tab 之上），省得滚很久找回复框 #}
+<div class="mobile-actionbar">
+  <a class="btn btn-primary btn-block" href="#reply-form">回复客户</a>
 </div>
 {% endblock %}
 
