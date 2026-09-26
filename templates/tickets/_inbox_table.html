@@ -1,59 +1,38 @@
 {% load ui %}
+{# 工单列表：宽屏是宽松行列表（.rows/.row），窄屏由 app.css 的 @media 把同一份 DOM 摊成卡片流。 #}
 <div id="inbox-table">
   {% if tickets %}
-  <div class="card">
-    <table class="table">
-      <thead>
-        <tr>
-          <th style="width:70px">工单号</th>
-          <th>主题</th>
-          <th style="width:200px">标签</th>
-          <th style="width:200px">客户</th>
-          <th style="width:130px">归属组</th>
-          <th style="width:110px">认领人</th>
-          <th style="width:150px">状态</th>
-          <th style="width:150px">最后消息</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for ticket in tickets %}
-        <tr>
-          <td><a href="{% url 'tickets:detail' ticket.pk %}">T#{{ ticket.pk }}</a></td>
-          <td>
-            <a href="{% url 'tickets:detail' ticket.pk %}" class="font-medium">{{ ticket.subject|truncatechars:80 }}</a>
-            {% if ticket.assignee_id and ticket.assignee_id == user.pk %}
-              <span class="badge badge-claimed ml-1">我认领的</span>
-            {% endif %}
-          </td>
-          <td>
-            {% with tags=ticket.ticket_tags.all %}
-            {% if tags %}
-            <div class="tag-list">
-              {% for link in tags|slice:":3" %}
-                {% if link.tag.group_id and link.tag.group_id != ticket.group_id %}
-                  <span class="tag-badge tag-{{ link.tag.color }}" style="opacity:.6"
-                        title="历史标签（原属「{{ link.tag.group.name }}」组）">{{ link.tag.name }}</span>
-                {% else %}
-                  <span class="tag-badge tag-{{ link.tag.color }}"
-                        title="{{ link.tag.description|default:link.tag.name }}">{{ link.tag.name }}</span>
-                {% endif %}
-              {% endfor %}
-              {% if tags|length > 3 %}<span class="text-muted text-xs">…+{{ tags|length|add:"-3" }}</span>{% endif %}
-            </div>
-            {% else %}
-            <span class="text-muted">—</span>
-            {% endif %}
-            {% endwith %}
-          </td>
-          <td class="text-sm">{{ ticket.customer_email }}</td>
-          <td class="text-sm">{{ ticket.group.name }}</td>
-          <td class="text-sm">{% if ticket.assignee %}{{ ticket.assignee.display_name }}{% else %}<span class="text-muted">未认领</span>{% endif %}</td>
-          <td>{{ ticket|status_badge }} {{ ticket|awaiting_badge }}</td>
-          <td class="text-sm text-muted">{{ ticket.last_message_at|date:"Y-m-d H:i" }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <div class="rows">
+    <div class="rows-head">
+      <span></span>
+      <span>主题</span>
+      <span>归属与认领</span>
+      <span>状态</span>
+      <span>最后消息</span>
+    </div>
+    {% for ticket in tickets %}
+    <a class="row" href="{% url 'tickets:detail' ticket.pk %}">
+      <span class="stripe {% if ticket.status == 'pending' %}stripe-pending{% elif ticket.status == 'closed' %}stripe-closed{% endif %}"></span>
+      <span>
+        <div class="row-subject ellipsis">
+          {{ ticket.subject|default:"（无主题）"|truncatechars:80 }}
+          {% if ticket.assignee_id and ticket.assignee_id == user.pk %}<span class="badge badge-claimed ml-1">我认领的</span>{% endif %}
+        </div>
+        <div class="row-sub ellipsis">
+          T#{{ ticket.pk }} · {{ ticket.customer_email }}
+          {% with tags=ticket.ticket_tags.all %}
+            {% for link in tags|slice:":3" %}
+              <span class="tag-badge tag-{{ link.tag.color }}{% if link.tag.group_id and link.tag.group_id != ticket.group_id %} tag-foreign{% endif %}">{{ link.tag.name }}</span>
+            {% endfor %}
+            {% if tags|length > 3 %}<span class="text-muted">…+{{ tags|length|add:"-3" }}</span>{% endif %}
+          {% endwith %}
+        </div>
+      </span>
+      <span class="text-muted nowrap">{{ ticket.group.name }} · {% if ticket.assignee %}{{ ticket.assignee.display_name }}{% else %}未认领{% endif %}</span>
+      <span>{{ ticket|status_badge }} {{ ticket|awaiting_badge }}</span>
+      <span class="text-muted nowrap">{{ ticket.last_message_at|date:"m-d H:i" }}</span>
+    </a>
+    {% endfor %}
   </div>
   {% include "partials/_pagination.html" %}
   {% else %}
