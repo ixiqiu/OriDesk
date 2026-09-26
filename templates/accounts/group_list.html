@@ -23,39 +23,41 @@
 
 <div class="card">
   {% if groups %}
+  <div class="table-responsive">
   <table class="table">
-    <thead>
-      <tr>
-        <th>名称</th>
-        <th>对外邮箱</th>
-        <th>对外身份邮箱</th>
-        <th>管理员组</th>
-        <th>成员数</th>
-        <th>工单数</th>
-        <th>操作</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for group in groups %}
-      <tr>
-        <td><a href="{% url 'accounts:group_edit' group.pk %}">{{ group.name }}</a></td>
-        <td>
-          {% if group.mailbox %}
-            {{ group.mailbox.email }}
-            {% if not group.mailbox.is_active %}<span class="badge badge-danger">已停用</span>{% endif %}
-          {% else %}
-            <span class="text-warning">无邮箱，回信走全局兜底邮箱</span>
-          {% endif %}
-        </td>
-        <td>{{ group.identity_email|default:"—（无可用邮箱）" }}</td>
-        <td>{% if group.is_admin_group %}<span class="badge badge-open">是</span>{% else %}<span class="text-muted">否</span>{% endif %}</td>
-        <td>{{ group.member_count }}</td>
-        <td>{{ group.ticket_count }}</td>
-        <td><a class="btn btn-sm" href="{% url 'accounts:group_edit' group.pk %}">编辑</a></td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+      <thead>
+        <tr>
+          <th>名称</th>
+          <th>对外邮箱</th>
+          <th>对外身份邮箱</th>
+          <th>管理员组</th>
+          <th>成员数</th>
+          <th>工单数</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for group in groups %}
+        <tr>
+          <td><a href="{% url 'accounts:group_edit' group.pk %}">{{ group.name }}</a></td>
+          <td>
+            {% if group.mailbox %}
+              {{ group.mailbox.email }}
+              {% if not group.mailbox.is_active %}<span class="badge badge-danger">已停用</span>{% endif %}
+            {% else %}
+              <span class="text-warning">无邮箱，回信走全局兜底邮箱</span>
+            {% endif %}
+          </td>
+          <td>{{ group.identity_email|default:"—（无可用邮箱）" }}</td>
+          <td>{% if group.is_admin_group %}<span class="badge badge-open">是</span>{% else %}<span class="text-muted">否</span>{% endif %}</td>
+          <td>{{ group.member_count }}</td>
+          <td>{{ group.ticket_count }}</td>
+          <td><a class="btn btn-sm" href="{% url 'accounts:group_edit' group.pk %}">编辑</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
   {% else %}
   <div class="empty">还没有任何用户组，请先创建。</div>
   {% endif %}

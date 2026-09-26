@@ -43,6 +43,8 @@ def pending_for_user(user) -> QuerySet[Ticket]:
     return (
         visible_tickets(user)
         .filter(is_awaiting_reply=True)
+        # 已关闭工单不进待回复队列（§5.5 语义："等客户回信"对已关闭工单不成立）
+        .exclude(status="closed")
         .filter(Q(assignee__isnull=True) | Q(assignee=user))
     )
 

@@ -58,50 +58,52 @@
     <span class="text-muted text-xs">共 {{ page_obj.paginator.count }} 条</span>
   </div>
   <div class="overflow-auto">
-    <table class="table">
-      <thead>
-        <tr>
-          <th>时间</th>
-          <th>动作</th>
-          <th>操作人</th>
-          <th>工单</th>
-          <th>组</th>
-          <th>对外身份</th>
-          <th>摘要</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for log in logs %}
-        <tr>
-          <td class="text-xs">{{ log.created_at|date:"Y-m-d H:i:s" }}</td>
-          <td>
-            {% if log.action == 'config_change' %}<span class="badge badge-pending">{{ log.get_action_display }}</span>
-            {% elif log.action == 'forward' %}<span class="badge badge-awaiting">{{ log.get_action_display }}</span>
-            {% else %}<span class="badge badge-open">{{ log.get_action_display }}</span>{% endif %}
-          </td>
-          <td>{% if log.user %}{{ log.user.display_name }}{% else %}<span class="text-muted">系统</span>{% endif %}</td>
-          <td>
-            {% if log.ticket_id %}
-              {% if log.ticket_visible %}
-                <a href="{% url 'tickets:detail' log.ticket_id %}">[T#{{ log.ticket_id }}]</a>
+    <div class="table-responsive">
+  <table class="table">
+        <thead>
+          <tr>
+            <th>时间</th>
+            <th>动作</th>
+            <th>操作人</th>
+            <th>工单</th>
+            <th>组</th>
+            <th>对外身份</th>
+            <th>摘要</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in logs %}
+          <tr>
+            <td class="text-xs">{{ log.created_at|date:"Y-m-d H:i:s" }}</td>
+            <td>
+              {% if log.action == 'config_change' %}<span class="badge badge-pending">{{ log.get_action_display }}</span>
+              {% elif log.action == 'forward' %}<span class="badge badge-awaiting">{{ log.get_action_display }}</span>
+              {% else %}<span class="badge badge-open">{{ log.get_action_display }}</span>{% endif %}
+            </td>
+            <td>{% if log.user %}{{ log.user.display_name }}{% else %}<span class="text-muted">系统</span>{% endif %}</td>
+            <td>
+              {% if log.ticket_id %}
+                {% if log.ticket_visible %}
+                  <a href="{% url 'tickets:detail' log.ticket_id %}">[T#{{ log.ticket_id }}]</a>
+                {% else %}
+                  <span class="text-muted">[T#{{ log.ticket_id }}]</span>
+                {% endif %}
               {% else %}
-                <span class="text-muted">[T#{{ log.ticket_id }}]</span>
+                <span class="text-muted">—</span>
               {% endif %}
-            {% else %}
-              <span class="text-muted">—</span>
-            {% endif %}
-          </td>
-          <td>{{ log.group.name|default:"—" }}</td>
-          <td>{{ log.identity_email|default:"—" }}</td>
-          <td class="text-xs">{{ log.summary|default:"—" }}</td>
-          <td><a class="btn btn-sm" href="{% url 'audit:log_detail' log.pk %}">详情</a></td>
-        </tr>
-        {% empty %}
-        <tr><td colspan="8" class="empty">没有符合条件的审计记录。</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+            </td>
+            <td>{{ log.group.name|default:"—" }}</td>
+            <td>{{ log.identity_email|default:"—" }}</td>
+            <td class="text-xs">{{ log.summary|default:"—" }}</td>
+            <td><a class="btn btn-sm" href="{% url 'audit:log_detail' log.pk %}">详情</a></td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="8" class="empty">没有符合条件的审计记录。</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 

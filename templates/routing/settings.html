@@ -13,7 +13,7 @@
 
 {% block content %}
 <div class="flex gap-4 items-start flex-wrap">
-  <div style="flex:1 1 620px; min-width:320px">
+  <div class="detail-main">
     <div class="card">
       <form method="post">
         {% csrf_token %}
@@ -70,7 +70,7 @@
     </div>
   </div>
 
-  <aside style="flex:0 1 340px; min-width:280px">
+  <aside class="detail-side">
     <div class="card">
       <div class="card-header"><h2 style="margin:0">兜底配置状态</h2></div>
       <div class="card-body text-sm">

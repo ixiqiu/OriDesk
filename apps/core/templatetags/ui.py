@@ -37,6 +37,9 @@ def status_badge(ticket):
 
 @register.filter
 def awaiting_badge(ticket):
+    # 已关闭工单不再显示"待回复"：关闭意味着这轮对话结束，"等客户回信"不成立
+    if getattr(ticket, "status", "") == "closed":
+        return mark_safe("")
     if not getattr(ticket, "is_awaiting_reply", False):
         return mark_safe("")
     if getattr(ticket, "assignee_id", None):

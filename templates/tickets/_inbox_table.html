@@ -28,7 +28,8 @@
           {% endwith %}
         </div>
       </span>
-      <span class="text-muted nowrap">{{ ticket.group.name }} · {% if ticket.assignee %}{{ ticket.assignee.display_name }}{% else %}未认领{% endif %}</span>
+      {# 已关闭工单不再提示"未认领"：关闭意味着这轮处理已结束 #}
+      <span class="text-muted nowrap">{{ ticket.group.name }}{% if ticket.assignee %} · {{ ticket.assignee.display_name }}{% elif ticket.status != 'closed' %} · 未认领{% endif %}</span>
       <span>{{ ticket|status_badge }} {{ ticket|awaiting_badge }}</span>
       <span class="text-muted nowrap">{{ ticket.last_message_at|date:"m-d H:i" }}</span>
     </a>

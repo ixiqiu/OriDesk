@@ -18,52 +18,54 @@
 <div class="card">
   {% if mailboxes %}
   <div class="overflow-auto">
-    <table class="table">
-      <thead>
-        <tr>
-          <th>名称</th>
-          <th>邮箱地址</th>
-          <th>兜底邮箱</th>
-          <th>绑定组</th>
-          <th>IMAP</th>
-          <th>SMTP</th>
-          <th>同步进度</th>
-          <th>凭据</th>
-          <th>状态</th>
-          <th>操作</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for mailbox in mailboxes %}
-        <tr>
-          <td><a href="{% url 'accounts:mailbox_edit' mailbox.pk %}">{{ mailbox.name }}</a></td>
-          <td>{{ mailbox.email }}</td>
-          <td>{% if mailbox.is_fallback %}<span class="badge badge-open">全局兜底</span>{% else %}<span class="text-muted">否</span>{% endif %}</td>
-          <td>
-            {% with bound=mailbox.owning_group %}
-              {% if bound %}{{ bound.name }}{% else %}<span class="text-muted">—（统一进线 / 未绑定）</span>{% endif %}
-            {% endwith %}
-          </td>
-          <td class="text-sm">{{ mailbox.imap_host }}:{{ mailbox.imap_port }}{% if mailbox.imap_ssl %} <span class="badge badge-closed">SSL</span>{% endif %}</td>
-          <td class="text-sm">{{ mailbox.smtp_host }}:{{ mailbox.smtp_port }}{% if mailbox.smtp_ssl %} <span class="badge badge-closed">SSL</span>{% endif %}</td>
-          <td class="text-sm text-muted">last_uid {{ mailbox.last_uid }}<br>uidvalidity {{ mailbox.uidvalidity }}</td>
-          <td>
-            {% if mailbox.has_secret %}<span class="badge badge-claimed">已配置</span>{% else %}<span class="badge badge-danger">未配置</span>{% endif %}
-          </td>
-          <td>{% if mailbox.is_active %}<span class="badge badge-claimed">启用</span>{% else %}<span class="badge badge-danger">停用</span>{% endif %}</td>
-          <td>
-            <div class="flex gap-2">
-              <a class="btn btn-sm" href="{% url 'accounts:mailbox_edit' mailbox.pk %}">编辑</a>
-              <form method="post" action="{% url 'accounts:mailbox_verify' mailbox.pk %}">
-                {% csrf_token %}
-                <button class="btn btn-sm" type="submit" title="只读登录 IMAP/SMTP，不发送任何邮件">连通性检查</button>
-              </form>
-            </div>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <div class="table-responsive">
+  <table class="table">
+        <thead>
+          <tr>
+            <th>名称</th>
+            <th>邮箱地址</th>
+            <th>兜底邮箱</th>
+            <th>绑定组</th>
+            <th>IMAP</th>
+            <th>SMTP</th>
+            <th>同步进度</th>
+            <th>凭据</th>
+            <th>状态</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for mailbox in mailboxes %}
+          <tr>
+            <td><a href="{% url 'accounts:mailbox_edit' mailbox.pk %}">{{ mailbox.name }}</a></td>
+            <td>{{ mailbox.email }}</td>
+            <td>{% if mailbox.is_fallback %}<span class="badge badge-open">全局兜底</span>{% else %}<span class="text-muted">否</span>{% endif %}</td>
+            <td>
+              {% with bound=mailbox.owning_group %}
+                {% if bound %}{{ bound.name }}{% else %}<span class="text-muted">—（统一进线 / 未绑定）</span>{% endif %}
+              {% endwith %}
+            </td>
+            <td class="text-sm">{{ mailbox.imap_host }}:{{ mailbox.imap_port }}{% if mailbox.imap_ssl %} <span class="badge badge-closed">SSL</span>{% endif %}</td>
+            <td class="text-sm">{{ mailbox.smtp_host }}:{{ mailbox.smtp_port }}{% if mailbox.smtp_ssl %} <span class="badge badge-closed">SSL</span>{% endif %}</td>
+            <td class="text-sm text-muted">last_uid {{ mailbox.last_uid }}<br>uidvalidity {{ mailbox.uidvalidity }}</td>
+            <td>
+              {% if mailbox.has_secret %}<span class="badge badge-claimed">已配置</span>{% else %}<span class="badge badge-danger">未配置</span>{% endif %}
+            </td>
+            <td>{% if mailbox.is_active %}<span class="badge badge-claimed">启用</span>{% else %}<span class="badge badge-danger">停用</span>{% endif %}</td>
+            <td>
+              <div class="flex gap-2">
+                <a class="btn btn-sm" href="{% url 'accounts:mailbox_edit' mailbox.pk %}">编辑</a>
+                <form method="post" action="{% url 'accounts:mailbox_verify' mailbox.pk %}">
+                  {% csrf_token %}
+                  <button class="btn btn-sm" type="submit" title="只读登录 IMAP/SMTP，不发送任何邮件">连通性检查</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
   {% else %}
   <div class="empty">还没有配置任何邮箱。</div>
