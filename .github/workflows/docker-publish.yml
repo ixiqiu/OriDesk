@@ -1,0 +1,84 @@
+# 打 tag 时构建并推送镜像到 ghcr.io（04-CICD与验证边界.md §3）。
+#
+# 为什么单独一个 workflow 而不是塞进 ci.yml：
+# ci.yml 跑在所有 push/PR 上（跑 pytest），而镜像构建只在**发布**时有意义，
+# 且它比 pytest 慢得多。混在一起会让每次提交都白白构建一次镜像。
+#
+# 与 android-release.yml 同一个触发模型：只由 `v*` tag 触发，无歧义。
+name: Docker Publish
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # 推镜像到 ghcr.io 需要 packages:write。默认的 GITHUB_TOKEN 权限在新仓库里
+  # 往往是只读的，这里显式声明，避免"构建成功但推送 403"。
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ghcr.io 的镜像路径**必须全小写**，而本仓库名是 `ixiqiu/OriDesk`（含大写）。
+      # 直接用 ${{ github.repository }} 会得到 ghcr.io/ixiqiu/OriDesk 并被拒绝，
+      # 报错信息是 "invalid reference format"，与"权限不足"很像，容易误判。
+      - name: 计算镜像名（ghcr 要求全小写）
+        id: image
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: 登录 ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 生成标签
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.image.outputs.name }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+
+      - name: 构建并推送
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # 用 GitHub Actions 缓存复用 Docker 层，避免每次全量重装依赖
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: 记录结果
+        run: |
+          {
+            echo "## 镜像已推送"
+            echo ""
+            echo '```'
+            echo "${{ steps.meta.outputs.tags }}"
+            echo '```'
+            echo ""
+            echo "拉取："
+            echo ""
+            echo '```bash'
+            echo "docker pull ${{ steps.image.outputs.name }}:latest"
+            echo '```'
+            echo ""
+            echo "> 公开仓库首次推送后，该 package 默认是 **private**，"
+            echo "> 需要在 GitHub 的 Packages 页面把它改为 public，否则服务器上"
+            echo "> \`docker pull\` 会要求登录。"
+          } >> "$GITHUB_STEP_SUMMARY"
