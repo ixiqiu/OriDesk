@@ -4,13 +4,32 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+import pytest
 from django.utils import timezone
 
 from apps.autoresponder.services import send_auto_reply, should_auto_reply
+from apps.mailboxes.pipeline import process_inbound
 from apps.tickets.models import Message
 from tests.conftest import make_ticket
+from tests.helpers import build_raw
 
 CUSTOMER = "customer@customer-domain.com"
+
+
+@pytest.fixture
+def login_rule(unified_mailbox, tech_group):
+    """统一邮箱收到含"登录"的邮件时路由到技术支持组。"""
+    from apps.routing.models import Rule
+
+    return Rule.objects.create(
+        mailbox=unified_mailbox,
+        priority=10,
+        match_field="subject",
+        match_op="contains",
+        match_value="登录",
+        action_type="assign_group",
+        action_value=str(tech_group.pk),
+    )
 
 
 def test_auto_reply_on_first_contact(unified_mailbox):
@@ -77,3 +96,74 @@ def test_group_template_overrides_global(unified_mailbox, tech_group, tech_mailb
     assert send_auto_reply(ticket, tech_mailbox) is not None
     message = Message.objects.filter(ticket=ticket, is_auto_reply=True).first()
     assert message.body_text == f"组专属模板 {ticket.pk}"
+
+
+def test_group_template_used_when_mailbox_routed_to_group(unified_mailbox, tech_group, outbox):
+    """统一进线邮箱经规则路由到组后，自动回复必须用该组的覆盖模板。
+
+    回归：组覆盖模板曾按入口邮箱绑定的组解析，而统一/兜底邮箱不绑定组，
+    导致路由到组的工单永远只发全局模板。
+    """
+    from apps.routing.models import Template
+
+    Template.objects.create(scope="global", body="全局模板")
+    Template.objects.create(scope="group", group=tech_group, body="技术组专属模板")
+
+    # 入口邮箱未绑定任何组，工单归属组由路由决定
+    ticket = make_ticket(mailbox=unified_mailbox, group=tech_group, customer_email=CUSTOMER)
+    assert unified_mailbox.owning_group is None
+
+    assert send_auto_reply(ticket, unified_mailbox) is not None
+    message = Message.objects.filter(ticket=ticket, is_auto_reply=True).first()
+    assert message.body_text == "技术组专属模板"
+
+
+def test_routed_group_without_template_falls_back_to_global(
+    unified_mailbox, finance_group, outbox
+):
+    """路由到未配置组模板的组时，回落到全局模板。"""
+    from apps.routing.models import Template
+
+    Template.objects.create(scope="global", body="全局模板")
+
+    ticket = make_ticket(mailbox=unified_mailbox, group=finance_group, customer_email=CUSTOMER)
+    assert send_auto_reply(ticket, unified_mailbox) is not None
+    message = Message.objects.filter(ticket=ticket, is_auto_reply=True).first()
+    assert message.body_text == "全局模板"
+
+
+def test_group_template_ignores_mailbox_group_when_ticket_routed_elsewhere(
+    unified_mailbox, tech_group, finance_group, tech_mailbox, outbox
+):
+    """工单组与邮箱绑定组不一致时，以工单组为准。
+
+    改派后可能出现"入口是组专用邮箱、工单却已在别的组"的情况，
+    此时应发工单所属组的模板，而不是邮箱绑定组的模板。
+    """
+    from apps.routing.models import Template
+
+    Template.objects.create(scope="group", group=tech_group, body="技术组模板")
+    Template.objects.create(scope="group", group=finance_group, body="财务组模板")
+
+    ticket = make_ticket(mailbox=tech_mailbox, group=finance_group, customer_email=CUSTOMER)
+    assert send_auto_reply(ticket, tech_mailbox) is not None
+    message = Message.objects.filter(ticket=ticket, is_auto_reply=True).first()
+    assert message.body_text == "财务组模板"
+
+
+def test_pipeline_routed_ticket_uses_group_template(
+    unified_mailbox, tech_group, login_rule, outbox
+):
+    """端到端：走完整流水线（规则路由 → 自动回复）也必须用组模板。"""
+    from apps.routing.models import Template
+
+    Template.objects.create(scope="global", body="全局模板")
+    Template.objects.create(scope="group", group=tech_group, body="技术组专属模板")
+
+    result = process_inbound(
+        unified_mailbox, 1, build_raw(sender=CUSTOMER, subject="无法登录后台")
+    )
+    assert result.ticket.group == tech_group
+    assert result.auto_replied is True
+    message = Message.objects.filter(ticket=result.ticket, is_auto_reply=True).first()
+    assert message.body_text == "技术组专属模板"

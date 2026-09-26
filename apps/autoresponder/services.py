@@ -70,18 +70,32 @@ def template_context(ticket: Ticket, mailbox) -> dict:
     }
 
 
-def resolve_template(mailbox) -> Template | None:
-    """模板解析：组覆盖 > 全局（开发文档 §5.3）。"""
-    group = getattr(mailbox, "owning_group", None) if mailbox is not None else None
-    if group is not None:
+def resolve_template(mailbox, ticket: Ticket | None = None) -> Template | None:
+    """模板解析：组覆盖 > 全局（开发文档 §5.3）。
+
+    组覆盖以**工单最终归属组**（`ticket.group`）为准，而不是入口邮箱绑定的组。
+    统一进线/兜底邮箱本身不绑定用户组，来信经规则路由后才落到某个组；若按邮箱
+    取组，这类工单永远命中不到组模板（仅组专用邮箱能命中）。组专用邮箱的场景下
+    两者是同一个组，故此处取工单组不改变既有行为。
+    组模板缺失时回落到全局模板。
+    """
+    candidates: list = []
+    if ticket is not None and ticket.group_id is not None:
+        candidates.append(ticket.group)
+    # 兼容仅传邮箱的调用（如模板管理页）：工单组不存在时退回邮箱绑定组。
+    mailbox_group = getattr(mailbox, "owning_group", None) if mailbox is not None else None
+    if mailbox_group is not None and all(g.pk != mailbox_group.pk for g in candidates):
+        candidates.append(mailbox_group)
+
+    for group in candidates:
         tpl = Template.objects.filter(scope="group", group=group).order_by("id").first()
         if tpl:
             return tpl
     return Template.objects.filter(scope="global").order_by("id").first()
 
 
-def resolve_template_body(mailbox) -> str:
-    tpl = resolve_template(mailbox)
+def resolve_template_body(mailbox, ticket: Ticket | None = None) -> str:
+    tpl = resolve_template(mailbox, ticket=ticket)
     return tpl.body if tpl else DEFAULT_TEMPLATE
 
 
@@ -109,7 +123,7 @@ def auto_reply_already_sent(ticket: Ticket) -> bool:
 
 def render_auto_reply_body(ticket: Ticket, mailbox, body: str | None = None) -> str:
     """渲染最终要发送的自动回复正文。"""
-    text = resolve_template_body(mailbox) if body is None else body
+    text = resolve_template_body(mailbox, ticket=ticket) if body is None else body
     return render_template(text, template_context(ticket, mailbox))
 
 
