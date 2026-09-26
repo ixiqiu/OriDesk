@@ -11,6 +11,7 @@ from __future__ import annotations
 from io import StringIO
 
 import pytest
+from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.core.management import call_command
 from django.core.management.base import CommandError
@@ -214,20 +215,32 @@ def test_fails_when_media_root_not_writable(db, ready_environment, tmp_path):
 
 
 # ------------------------------------------------------------------ WARN 项与 strict
-def test_warns_about_sqlite_but_passes(db, ready_environment):
-    output = run()  # 不抛异常 = 没有 FAIL
-    assert "数据库使用 SQLite" in output
+def test_passes_when_only_warnings(db, ready_environment):
+    """只要没有 FAIL 就放行（普通模式），与具体数据库无关。"""
+    output = run()
     assert "自检通过" in output
 
 
+def test_database_check_matches_engine(db, ready_environment):
+    """SQLite → 警告改用 MariaDB；MariaDB → 校验 utf8mb4 字符集。"""
+    output = run()
+    engine = settings.DATABASES["default"]["ENGINE"]
+    if "sqlite" in engine:
+        assert "数据库使用 SQLite" in output
+    else:
+        assert "库字符集" in output or "数据库可连接" in output
+
+
 def test_strict_mode_blocks_on_warnings(db, ready_environment):
+    Setting.set("fallback_group_id", "")  # 制造一个必然存在的 WARN，使断言与运行环境无关
     with pytest.raises(CommandError) as exc:
         run("--strict")
     assert "strict" in str(exc.value)
 
 
 def test_warns_when_attachment_prefix_missing(db, ready_environment):
-    output = run()
+    with override_settings(ATTACHMENT_X_ACCEL_PREFIX=""):
+        output = run()
     assert "未配置 ATTACHMENT_X_ACCEL_PREFIX" in output
 
 
