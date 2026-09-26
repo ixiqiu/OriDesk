@@ -39,6 +39,24 @@
 - 模板标签库 `{% load ui %}` 提供：`status_badge`、`awaiting_badge`、`direction_label`、`sender_label`、`qs_replace`（保留查询串）、`nav_active`。
 - 样式类来自 `static/css/app.css`（Tailwind 风格子集 + 组件类：`.card`、`.btn`、`.btn-primary`、`.badge-*`、`.table`、`.alert-*`、`.form-row`、`.empty`）。禁止引入外部 CDN。
 - 前端脚本一律放 `static/js/` 并在 `extra_js` 中引用；HTMX 已在 base 中加载（`static/vendor/htmx.min.js`）。
+- 静态资源带内容哈希（生产 `ManifestStaticFilesStorage`）：`{% static %}` 会自动输出
+  `app.<hash>.css` 这类指纹文件名，改完前端不需要用户清缓存；因此**不要手写静态资源路径**。
+  改完 `static/` 下的文件无需其它操作，`collectstatic`（容器启动时执行）会重建清单。
+- 新增的公共类（v2 视觉重设计，2026-09，均在 `app.css` / 由 `base.html` 渲染）：
+
+| 类别 | 类名 | 说明 |
+|---|---|---|
+| 外壳 | `.rail` `.rail-brand` `.rail-sec` `.rail-item` `.rail-foot` | 桌面左导航（分组 + 计数）；≤900px 由 `@media` 转为抽屉 |
+| 外壳 | `.m-tabbar` `.m-tab` | 窄屏底部 Tab（一级导航），桌面 `display:none` |
+| 外壳 | `.nav-toggle` `#nav-toggle` / `.nav-backdrop` `#nav-backdrop` | 窄屏汉堡按钮与遮罩，逻辑在 `static/js/nav.js` |
+| 列表 | `.list-toolbar` `.list-search` `.chips` `.chip` `.chip-active` `.list-count` | 搜索常驻 + 常用筛选 chips |
+| 列表 | `.rows` `.rows-head` `.row` `.row-subject` `.row-sub` `.stripe*` | 宽屏宽松行列表；≤900px 同一份 DOM 转卡片流 |
+| 弹层 | `.sheet-dialog` `.sheet` `.sheet-grip` `.sheet-head` `.sheet-body` `.sheet-foot` | 基于原生 `<dialog>.showModal()`（遮罩/Esc/焦点由浏览器负责），逻辑在 `static/js/sheet.js` |
+| 通用 | `.icon` `.icon-sm` `.iconbtn` `.avatar` `.count` `.kv` `.badge-*`（浅底+圆点） | 图标一律内联 SVG；状态徽标统一「浅底 + 深字 + 圆点」 |
+
+- 弹层用法：`<button data-sheet-open="<dialog id>">` 打开，内部 `[data-sheet-close]` 关闭，
+  弹层内容放在 `<form>` 内即可随表单一起提交（列表页筛选就是这么用的）。
+
 
 ## 3. 上下文变量
 
