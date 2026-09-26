@@ -254,7 +254,16 @@ LOGGING = {
 # ---------------------------------------------------------------- 安全（文档 §10.3）
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 USE_X_FORWARDED_HOST = True
-if not DEBUG:
+if UNDER_TEST:
+    # 单元测试通过 Django test client 走 http://testserver：
+    # 若沿用生产开关，SECURE_SSL_REDIRECT 会把每个请求先 301 到 https，
+    # 断言"未登录跳转 302 / 越权 403"的用例全部失配（CI 上真实踩到过）。
+    # 同时关闭 Secure Cookie 与 HSTS，保证测试结果与本地是否有 .env 无关。
+    SECURE_SSL_REDIRECT = False
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
+    SECURE_HSTS_SECONDS = 0
+elif not DEBUG:
     SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", True)
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
@@ -271,6 +280,14 @@ if not DEBUG:
 
 # Fernet 密钥（邮箱凭据加密，文档 §9.3）
 FERNET_KEY = env("FERNET_KEY")
+if not FERNET_KEY and (DEBUG or UNDER_TEST):
+    # 与 SECRET_KEY 同样处理：本地调试/单元测试用**确定性派生**的开发密钥，
+    # 让"没写 .env 也能跑测试"；生产（DEBUG=False 且非测试）不会走到这里，
+    # 而是由 `manage.py deploy_check` 判 FAIL、运行时报明确的 CredentialError。
+    import base64 as _b64
+    import hashlib as _hashlib
+
+    FERNET_KEY = _b64.urlsafe_b64encode(_hashlib.sha256(b"dev-fernet").digest()).decode()
 
 # 附件下发的 X-Accel-Redirect 前缀（生产推荐，见 docs/安全清单核查.md）：
 # 配置后 /media/attachments/ 可在 Nginx 侧设为 internal，只有通过 Django 鉴权的

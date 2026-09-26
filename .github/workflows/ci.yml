@@ -58,8 +58,10 @@ jobs:
       DB_HOST: 127.0.0.1
       DB_PORT: "3306"
       DB_NAME: ticket_system_test
-      DB_USER: ticket
-      DB_PASSWORD: ticket
+      # Django 测试运行器需要 CREATE DATABASE 来建 test_<DB_NAME>；
+      # 服务容器给 MARIADB_USER 的授权只覆盖业务库，因此这里用 root 跑测试。
+      DB_USER: root
+      DB_PASSWORD: root
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

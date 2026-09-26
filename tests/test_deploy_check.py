@@ -14,6 +14,7 @@ import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django.core.management import call_command
 from django.core.management.base import CommandError
+from django.db import connection
 from django.test import override_settings
 
 from apps.accounts.models import Group, Mailbox
@@ -108,6 +109,10 @@ def test_fails_when_duplicate_fallback_mailboxes(db, ready_environment, monkeypa
     assert "应唯一" in str(exc.value)
 
 
+@pytest.mark.skipif(
+    not connection.features.supports_partial_indexes,
+    reason="该行为依赖「带条件的唯一索引」：MariaDB/MySQL 不支持（DEV-4），此处只验证支持的平台",
+)
 def test_sqlite_constraint_rejects_duplicate_fallback_mailboxes(db):
     """同一件事在 SQLite/PostgreSQL 上由数据库拦住（说明 DEV-4 的平台差异）。"""
     from django.db import IntegrityError, transaction
