@@ -205,6 +205,21 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 MEDIA_URL = "/media/"
 MEDIA_ROOT = Path(env("MEDIA_ROOT", str(BASE_DIR / "media")))
 
+# 静态资源指纹（文档 §10.3 之外的工程约定）：
+# 生产用 ManifestStaticFilesStorage —— collectstatic 会为每个静态文件生成带内容哈希的
+# 文件名（app.3f2a1b.css）并写 staticfiles.json，{% static %} 自动指向哈希版。
+# 这样改了 CSS/JS 后浏览器一定会取到新文件，不需要用户手动强刷，也不需要改模板。
+# 本地开发与单元测试保持普通存储：测试不跑 collectstatic，用 manifest 会因缺清单报错。
+_STATIC_BACKEND = (
+    "django.contrib.staticfiles.storage.StaticFilesStorage"
+    if (DEBUG or UNDER_TEST)
+    else "django.contrib.staticfiles.storage.ManifestStaticFilesStorage"
+)
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": _STATIC_BACKEND},
+}
+
 # 附件上传上限（文档 §4.6 max_attachment_size_mb 的兜底默认值）
 _MAX_ATTACHMENT_MB = env_int("MAX_ATTACHMENT_SIZE_MB", 25)
 DATA_UPLOAD_MAX_MEMORY_SIZE = _MAX_ATTACHMENT_MB * 1024 * 1024
